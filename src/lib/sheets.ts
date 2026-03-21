@@ -59,13 +59,21 @@ export interface WeekData {
   goals: { calories: number; fat: number; carbs: number; protein: number };
 }
 
-// Get the sheet name for a given week (using the Monday date)
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// Get current date in US Eastern time
+function nowEastern(): Date {
+  const str = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  return new Date(str);
+}
+
+// Get the sheet name for a given week (using the Sunday date)
 function getWeekSheetName(date: Date): string {
   // Find the Sunday of that week
   const d = new Date(date);
   const day = d.getDay();
   d.setDate(d.getDate() - day);
-  const month = d.toLocaleString("en-US", { month: "short" }).toLowerCase();
+  const month = MONTHS[d.getMonth()];
   const dayNum = d.getDate();
   const year = d.getFullYear();
   return `${month} ${dayNum} ${year}`;
@@ -189,7 +197,7 @@ async function ensureWeekSheet(date: Date): Promise<string> {
 
 // Read the current week's data
 export async function getCurrentWeekData(date?: Date): Promise<WeekData> {
-  const targetDate = date || new Date();
+  const targetDate = date || nowEastern();
   const sheetName = await ensureWeekSheet(targetDate);
   const sheets = getSheets();
 
