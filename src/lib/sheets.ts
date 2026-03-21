@@ -37,6 +37,13 @@ function getSheets() {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID!;
 
+const DEFAULT_GOALS = {
+  calories: Number(process.env.GOAL_CALORIES) || 2650,
+  fat: Number(process.env.GOAL_FAT) || 85,
+  carbs: Number(process.env.GOAL_CARBS) || 230,
+  protein: Number(process.env.GOAL_PROTEIN) || 180,
+};
+
 export interface MealEntry {
   description: string;
   calories: number;
@@ -153,10 +160,10 @@ async function ensureWeekSheet(date: Date): Promise<string> {
     "",
     "",
     "",
-    "2650",
-    "85",
-    "230",
-    "180",
+    String(DEFAULT_GOALS.calories),
+    String(DEFAULT_GOALS.fat),
+    String(DEFAULT_GOALS.carbs),
+    String(DEFAULT_GOALS.protein),
   ]);
   headers.push([
     "",
@@ -208,10 +215,10 @@ export async function getCurrentWeekData(date?: Date): Promise<WeekData> {
 
   const rows = result.data.values || [];
   const goals = {
-    calories: Number(rows[1]?.[6]) || 2650,
-    fat: Number(rows[1]?.[7]) || 85,
-    carbs: Number(rows[1]?.[8]) || 230,
-    protein: Number(rows[1]?.[9]) || 180,
+    calories: Number(rows[1]?.[6]) || DEFAULT_GOALS.calories,
+    fat: Number(rows[1]?.[7]) || DEFAULT_GOALS.fat,
+    carbs: Number(rows[1]?.[8]) || DEFAULT_GOALS.carbs,
+    protein: Number(rows[1]?.[9]) || DEFAULT_GOALS.protein,
   };
 
   const days: DayData[] = [];
