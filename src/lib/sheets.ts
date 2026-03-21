@@ -1,21 +1,32 @@
 import { google } from "googleapis";
 
-function getPrivateKey(): string {
-  const raw = process.env.GOOGLE_PRIVATE_KEY || "";
-  // If it starts with the PEM header, it's already a key (with \n escapes or real newlines)
-  if (raw.startsWith("-----BEGIN")) {
-    return raw.replace(/\\n/g, "\n").replace(/"/g, "");
+function getCredentials(): { client_email: string; private_key: string } {
+  // Option 1: GOOGLE_CREDENTIALS contains the entire service account JSON (base64 encoded)
+  if (process.env.GOOGLE_CREDENTIALS) {
+    const json = Buffer.from(process.env.GOOGLE_CREDENTIALS, "base64").toString("utf-8");
+    const parsed = JSON.parse(json);
+    return { client_email: parsed.client_email, private_key: parsed.private_key };
   }
-  // Otherwise it's base64 encoded
-  return Buffer.from(raw, "base64").toString("utf-8");
+
+  // Option 2: Separate env vars
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY || "";
+  let privateKey: string;
+  if (rawKey.startsWith("-----BEGIN")) {
+    privateKey = rawKey.replace(/\\n/g, "\n").replace(/"/g, "");
+  } else {
+    privateKey = Buffer.from(rawKey, "base64").toString("utf-8");
+  }
+
+  return {
+    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "",
+    private_key: privateKey,
+  };
 }
 
 function getAuth() {
+  const creds = getCredentials();
   return new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: getPrivateKey(),
-    },
+    credentials: creds,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }
