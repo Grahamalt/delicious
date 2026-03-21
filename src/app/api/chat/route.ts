@@ -3,11 +3,6 @@ import { chat, ChatMessage } from "@/lib/llm";
 import { getCurrentWeekData, addMeal, updateDayTotals, getNotes } from "@/lib/sheets";
 
 export async function POST(req: NextRequest) {
-  const password = req.headers.get("x-app-password");
-  if (password !== process.env.APP_PASSWORD) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { messages } = (await req.json()) as { messages: ChatMessage[] };
 
   try {

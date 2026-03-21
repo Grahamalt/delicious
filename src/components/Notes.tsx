@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-export default function Notes({ password }: { password: string }) {
+export default function Notes() {
   const [notes, setNotes] = useState<string[]>([]);
   const [newNote, setNewNote] = useState("");
   const [loading, setLoading] = useState(true);
@@ -10,7 +10,6 @@ export default function Notes({ password }: { password: string }) {
 
   useEffect(() => {
     fetch("/api/notes", {
-      headers: { "x-app-password": password },
     })
       .then((r) => r.json())
       .then((data) => {
@@ -30,7 +29,6 @@ export default function Notes({ password }: { password: string }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-app-password": password,
       },
       body: JSON.stringify({ notes: updated }),
     });
@@ -45,7 +43,6 @@ export default function Notes({ password }: { password: string }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-app-password": password,
       },
       body: JSON.stringify({ notes: updated }),
     });

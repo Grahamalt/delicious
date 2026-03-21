@@ -7,18 +7,12 @@ import Notes from "@/components/Notes";
 import { WeekData } from "@/lib/sheets";
 
 export default function Home() {
-  const [password, setPassword] = useState("");
-  const [authenticated, setAuthenticated] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "data" | "notes">("chat");
   const [weekData, setWeekData] = useState<WeekData | null>(null);
 
   const fetchWeekData = useCallback(async () => {
-    if (!password) return;
     try {
-      const res = await fetch("/api/sheets", {
-        headers: { "x-app-password": password },
-      });
+      const res = await fetch("/api/sheets");
       if (res.ok) {
         const data = await res.json();
         setWeekData(data);
@@ -26,53 +20,11 @@ export default function Home() {
     } catch {
       // silently fail, will retry
     }
-  }, [password]);
-
-  useEffect(() => {
-    // Check for saved password
-    const saved = localStorage.getItem("ct_password");
-    if (saved) {
-      setPassword(saved);
-      setAuthenticated(true);
-    }
   }, []);
 
   useEffect(() => {
-    if (authenticated) {
-      fetchWeekData();
-    }
-  }, [authenticated, fetchWeekData]);
-
-  const login = () => {
-    setPassword(passwordInput);
-    localStorage.setItem("ct_password", passwordInput);
-    setAuthenticated(true);
-  };
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="bg-gray-900 rounded-xl p-6 w-full max-w-sm">
-          <h1 className="text-xl font-bold mb-4">Delicious</h1>
-          <input
-            type="password"
-            value={passwordInput}
-            onChange={(e) => setPasswordInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && login()}
-            placeholder="Password"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            autoFocus
-          />
-          <button
-            onClick={login}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium"
-          >
-            Enter
-          </button>
-        </div>
-      </div>
-    );
-  }
+    fetchWeekData();
+  }, [fetchWeekData]);
 
   return (
     <div className="h-screen flex flex-col max-w-2xl mx-auto">
@@ -119,14 +71,14 @@ export default function Home() {
       {/* Content */}
       <div className="flex-1 overflow-hidden p-3">
         {activeTab === "chat" ? (
-          <Chat password={password} onMealLogged={fetchWeekData} />
+          <Chat onMealLogged={fetchWeekData} />
         ) : activeTab === "data" ? (
           <div className="h-full overflow-y-auto">
             <WeekTable data={weekData} />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
-            <Notes password={password} />
+            <Notes />
           </div>
         )}
       </div>

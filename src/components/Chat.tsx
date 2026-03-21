@@ -16,10 +16,8 @@ interface Message {
 }
 
 export default function Chat({
-  password,
   onMealLogged,
 }: {
-  password: string;
   onMealLogged: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,7 +44,6 @@ export default function Chat({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-app-password": password,
         },
         body: JSON.stringify({
           messages: newMessages.map((m) => ({
