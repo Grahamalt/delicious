@@ -14,10 +14,11 @@ export async function GET(req: NextRequest) {
   try {
     const data = await getCurrentWeekData(date);
     return NextResponse.json(data);
-  } catch (error) {
-    console.error("Sheets error:", error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("Sheets error:", errMsg);
     return NextResponse.json(
-      { error: "Failed to fetch sheet data" },
+      { error: `Failed to fetch sheet data: ${errMsg}` },
       { status: 500 }
     );
   }
