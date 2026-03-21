@@ -17,7 +17,7 @@ export default function Notes() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [password]);
+  }, []);
 
   const addNote = async () => {
     if (!newNote.trim()) return;
