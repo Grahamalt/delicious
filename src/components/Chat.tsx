@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -24,11 +25,20 @@ export default function Chat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 150) + "px";
+    }
+  }, [input]);
 
   const send = async () => {
     if (!input.trim() || loading) return;
@@ -78,60 +88,66 @@ export default function Chat({
       setMessages([...newMessages, errorMsg]);
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
     }
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-3">
+      <div className="flex-1 overflow-y-auto pb-4">
         {messages.length === 0 && (
-          <div className="text-gray-500 text-sm text-center py-8">
-            Tell me what you ate and I&apos;ll estimate the macros and log it.
-            <br />
-            <span className="text-gray-600">
-              e.g. &quot;I had 2 eggs and toast for breakfast&quot;
-            </span>
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="text-2xl font-semibold text-gray-300 mb-2">Delicious</div>
+            <div className="text-gray-500 text-sm">
+              Tell me what you ate and I&apos;ll log it.
+              <br />
+              Ask me about strategy, meal ideas, or macro advice.
+            </div>
           </div>
         )}
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                msg.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-800 text-gray-200"
-              }`}
-            >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
-              {msg.logged && msg.meal && (
-                <div className="mt-2 pt-2 border-t border-gray-700 text-xs text-green-400">
-                  Logged: {msg.meal.description} ({msg.meal.calories} cal,{" "}
-                  {msg.meal.fat}f, {msg.meal.carbs}c, {msg.meal.protein}p)
+          <div key={i}>
+            {msg.role === "user" ? (
+              <div className="flex justify-end mb-4 px-2">
+                <div className="bg-gray-700/60 rounded-3xl px-4 py-2.5 max-w-[85%] text-[15px] text-gray-100">
+                  {msg.content}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="mb-4 px-2">
+                <div className="prose prose-invert prose-sm max-w-none text-[15px] leading-relaxed text-gray-200">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+                {msg.logged && msg.meal && (
+                  <div className="mt-2 ml-0 inline-flex items-center gap-1.5 bg-green-900/30 border border-green-800/40 rounded-full px-3 py-1 text-xs text-green-400">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Logged: {msg.meal.description} ({msg.meal.calories} cal, {msg.meal.fat}f, {msg.meal.carbs}c, {msg.meal.protein}p)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {loading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-400">
-              Thinking...
+          <div className="mb-4 px-2">
+            <div className="flex items-center gap-1 text-gray-400">
+              <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
+              <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
+              <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-gray-800 pt-3">
-        <div className="flex gap-2">
+      {/* Input bar */}
+      <div className="pb-2 pt-2">
+        <div className="relative flex items-end bg-gray-800 border border-gray-700 rounded-2xl px-4 py-2">
           <textarea
-            ref={inputRef}
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -140,16 +156,18 @@ export default function Chat({
                 send();
               }
             }}
-            placeholder="What did you eat?"
+            placeholder="Message"
             rows={1}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500"
+            className="flex-1 bg-transparent text-[15px] resize-none focus:outline-none placeholder-gray-500 text-gray-100 max-h-[150px]"
           />
           <button
             onClick={send}
             disabled={loading || !input.trim()}
-            className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="ml-2 shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white disabled:bg-gray-600 disabled:text-gray-400 text-black transition-colors"
           >
-            Send
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+            </svg>
           </button>
         </div>
       </div>
