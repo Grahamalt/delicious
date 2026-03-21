@@ -1,10 +1,20 @@
 import { google } from "googleapis";
 
+function getPrivateKey(): string {
+  const raw = process.env.GOOGLE_PRIVATE_KEY || "";
+  // If it starts with the PEM header, it's already a key (with \n escapes or real newlines)
+  if (raw.startsWith("-----BEGIN")) {
+    return raw.replace(/\\n/g, "\n").replace(/"/g, "");
+  }
+  // Otherwise it's base64 encoded
+  return Buffer.from(raw, "base64").toString("utf-8");
+}
+
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n").replace(/"/g, ""),
+      private_key: getPrivateKey(),
     },
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
