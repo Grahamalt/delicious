@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,7 +24,29 @@ export default function Chat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load chat history from localStorage, clear if it's a new day
+  useEffect(() => {
+    const saved = localStorage.getItem("chat_messages");
+    const savedDate = localStorage.getItem("chat_date");
+    const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+
+    if (saved && savedDate === today) {
+      setMessages(JSON.parse(saved));
+    } else {
+      localStorage.removeItem("chat_messages");
+      localStorage.setItem("chat_date", today);
+    }
+  }, []);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("chat_messages", JSON.stringify(messages));
+      localStorage.setItem("chat_date", new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" }));
+    }
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,7 +54,7 @@ export default function Chat({
 
   // Auto-resize textarea
   useEffect(() => {
-    const el = textareaRef.current;
+    const el = inputRef.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 150) + "px";
@@ -88,7 +109,7 @@ export default function Chat({
       setMessages([...newMessages, errorMsg]);
     } finally {
       setLoading(false);
-      textareaRef.current?.focus();
+      inputRef.current?.focus();
     }
   };
 
@@ -117,7 +138,7 @@ export default function Chat({
             ) : (
               <div className="mb-4 px-2">
                 <div className="prose prose-invert prose-sm max-w-none text-[15px] leading-relaxed text-gray-200">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
                 {msg.logged && msg.meal && (
                   <div className="mt-2 ml-0 inline-flex items-center gap-1.5 bg-green-900/30 border border-green-800/40 rounded-full px-3 py-1 text-xs text-green-400">
@@ -147,7 +168,7 @@ export default function Chat({
       <div className="pb-2 pt-2">
         <div className="relative flex items-end bg-gray-800 border border-gray-700 rounded-2xl px-4 py-2">
           <textarea
-            ref={textareaRef}
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
