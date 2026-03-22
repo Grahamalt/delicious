@@ -20,7 +20,7 @@ function formatWeekContext(weekData: WeekData): string {
 }
 
 function getSystemPrompt(weekData: WeekData, notes: string[] = []): string {
-  const today = new Date();
+  const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
   const dayNames = [
     "Sunday", "Monday", "Tuesday", "Wednesday",
     "Thursday", "Friday", "Saturday",
