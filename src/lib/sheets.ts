@@ -406,6 +406,82 @@ export async function getYearlySummary(): Promise<{ weeks: WeekSummary[]; goals:
   return { weeks, goals };
 }
 
+// --- Progress tracking (weight + photos) stored in "Progress" tab ---
+
+export interface ProgressEntry {
+  date: string;
+  time: string;
+  weight: number | null;
+  photo: string | null; // base64 thumbnail
+  note: string;
+}
+
+async function ensureProgressSheet(): Promise<string> {
+  const sheets = getSheets();
+  const sheetName = "Progress";
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+  });
+
+  const existing = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+
+  if (existing) return sheetName;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: sheetName } } }],
+    },
+  });
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A1:E1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["Date", "Time", "Weight", "Photo", "Note"]] },
+  });
+
+  return sheetName;
+}
+
+export async function getProgress(): Promise<ProgressEntry[]> {
+  const sheetName = await ensureProgressSheet();
+  const sheets = getSheets();
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A2:E500`,
+  });
+
+  const rows = result.data.values || [];
+  return rows
+    .filter((r) => r[0])
+    .map((r) => ({
+      date: r[0] || "",
+      time: r[1] || "",
+      weight: r[2] ? Number(r[2]) : null,
+      photo: r[3] || null,
+      note: r[4] || "",
+    }));
+}
+
+export async function addProgress(entry: ProgressEntry): Promise<void> {
+  const sheetName = await ensureProgressSheet();
+  const sheets = getSheets();
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A:E`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[entry.date, entry.time, entry.weight || "", entry.photo || "", entry.note]],
+    },
+  });
+}
+
 // --- Notes/Goals stored in a dedicated "Notes" tab ---
 
 async function ensureNotesSheet(): Promise<string> {
