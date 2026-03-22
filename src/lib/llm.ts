@@ -57,6 +57,17 @@ When the user wants to log a meal, include this JSON block at the END of your re
 
 Use today's date unless the user specifies otherwise. Keep descriptions concise but descriptive (similar to their existing style like "2 servings Fage, 1 tbs honey" or "Kind bar").
 
+When the user wants to remove/delete a meal entry, include this JSON block at the END of your response:
+
+\`\`\`meal_remove
+{
+  "description": "the meal description to match (or a close partial match)",
+  "date": "YYYY-MM-DD"
+}
+\`\`\`
+
+Match the description as closely as possible to what's in the spreadsheet. Use today's date unless the user specifies otherwise.
+
 Important guidelines:
 ${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging! Use emojis to make the conversation fun and engaging 🎉
 - Give thorough, detailed responses with explanations and tips.
@@ -78,6 +89,7 @@ export interface ChatResponse {
   message: string;
   mealToLog?: MealEntry;
   dateToLog?: string;
+  mealToRemove?: { description: string; date: string };
 }
 
 async function chatClaude(
@@ -145,9 +157,25 @@ function parseResponse(text: string): ChatResponse {
     }
   }
 
-  const cleanMessage = text.replace(/```meal_log\s*\n[\s\S]*?\n```/, "").trim();
+  // Parse meal_remove JSON if present
+  const removeMatch = text.match(/```meal_remove\s*\n([\s\S]*?)\n```/);
+  let mealToRemove: { description: string; date: string } | undefined;
 
-  return { message: cleanMessage, mealToLog, dateToLog };
+  if (removeMatch) {
+    try {
+      const parsed = JSON.parse(removeMatch[1]);
+      mealToRemove = { description: parsed.description, date: parsed.date };
+    } catch {
+      // Invalid JSON, skip
+    }
+  }
+
+  const cleanMessage = text
+    .replace(/```meal_log\s*\n[\s\S]*?\n```/, "")
+    .replace(/```meal_remove\s*\n[\s\S]*?\n```/, "")
+    .trim();
+
+  return { message: cleanMessage, mealToLog, dateToLog, mealToRemove };
 }
 
 export async function chat(

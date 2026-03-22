@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chat, ChatMessage } from "@/lib/llm";
-import { getCurrentWeekData, addMeal, updateDayTotals, getNotes } from "@/lib/sheets";
+import { getCurrentWeekData, addMeal, removeMeal, updateDayTotals, getNotes } from "@/lib/sheets";
 
 export async function POST(req: NextRequest) {
   const { messages } = (await req.json()) as { messages: ChatMessage[] };
@@ -19,10 +19,21 @@ export async function POST(req: NextRequest) {
       await updateDayTotals(logDate);
     }
 
+    // If Claude suggested removing a meal, do it
+    let removed = false;
+    if (response.mealToRemove) {
+      const removeDate = new Date(response.mealToRemove.date + "T12:00:00");
+      removed = await removeMeal(removeDate, response.mealToRemove.description);
+      if (removed) {
+        await updateDayTotals(removeDate);
+      }
+    }
+
     return NextResponse.json({
       message: response.message,
       logged: !!response.mealToLog,
       meal: response.mealToLog,
+      removed,
     });
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);

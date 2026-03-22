@@ -427,6 +427,57 @@ export async function addMeal(
   });
 }
 
+// Remove a meal from a specific day by matching description
+export async function removeMeal(
+  date: Date,
+  description: string
+): Promise<boolean> {
+  const sheetName = await ensureWeekSheet(date);
+  const sheets = getSheets();
+  const dayIndex = date.getDay();
+  const colOffset = dayIndex * 5;
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A1:AI50`,
+  });
+
+  const rows = result.data.values || [];
+  const descLower = description.toLowerCase();
+
+  // Find the row with the closest matching description
+  let matchRow = -1;
+  for (let row = 6; row < rows.length; row++) {
+    const cell = rows[row]?.[colOffset];
+    if (cell && cell.toLowerCase().includes(descLower) || (cell && descLower.includes(cell.toLowerCase()))) {
+      matchRow = row;
+      break;
+    }
+  }
+
+  if (matchRow === -1) return false;
+
+  const colLetter = (n: number): string => {
+    let r = "";
+    while (n >= 0) {
+      r = String.fromCharCode((n % 26) + 65) + r;
+      n = Math.floor(n / 26) - 1;
+    }
+    return r;
+  };
+
+  const startCol = colLetter(colOffset);
+  const endCol = colLetter(colOffset + 4);
+  const range = `'${sheetName}'!${startCol}${matchRow + 1}:${endCol}${matchRow + 1}`;
+
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SHEET_ID,
+    range,
+  });
+
+  return true;
+}
+
 // Update the totals row for a specific day
 export async function updateDayTotals(date: Date): Promise<void> {
   const weekData = await getCurrentWeekData(date);
