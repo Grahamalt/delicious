@@ -311,6 +311,101 @@ export async function getCurrentWeekData(date?: Date): Promise<WeekData> {
   };
 }
 
+// Get yearly summary - averages per week for the calendar year
+export interface WeekSummary {
+  weekStart: string;
+  averages: { calories: number; fat: number; carbs: number; protein: number };
+  daysLogged: number;
+}
+
+export async function getYearlySummary(): Promise<{ weeks: WeekSummary[]; goals: { calories: number; fat: number; carbs: number; protein: number } }> {
+  const sheets = getSheets();
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+  });
+
+  const now = nowEastern();
+  const currentYear = now.getFullYear();
+  const allTabs = spreadsheet.data.sheets?.map((s) => s.properties?.title || "") || [];
+
+  // Filter tabs that match our week naming pattern for the current year
+  const weekTabs = allTabs.filter((name) => {
+    const parts = name.split(" ");
+    if (parts.length !== 3) return false;
+    const year = parseInt(parts[2]);
+    return year === currentYear && MONTHS.includes(parts[0]);
+  });
+
+  // Sort by date
+  weekTabs.sort((a, b) => {
+    const pa = a.split(" ");
+    const pb = b.split(" ");
+    const ma = MONTHS.indexOf(pa[0]);
+    const mb = MONTHS.indexOf(pb[0]);
+    if (ma !== mb) return ma - mb;
+    return parseInt(pa[1]) - parseInt(pb[1]);
+  });
+
+  const weeks: WeekSummary[] = [];
+  let goals = DEFAULT_GOALS;
+
+  for (const tab of weekTabs) {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `'${tab}'!A1:AI50`,
+    });
+
+    const rows = result.data.values || [];
+
+    // Read goals from this tab
+    goals = {
+      calories: Number(rows[1]?.[6]) || DEFAULT_GOALS.calories,
+      fat: Number(rows[1]?.[7]) || DEFAULT_GOALS.fat,
+      carbs: Number(rows[1]?.[8]) || DEFAULT_GOALS.carbs,
+      protein: Number(rows[1]?.[9]) || DEFAULT_GOALS.protein,
+    };
+
+    let totalCal = 0, totalFat = 0, totalCarbs = 0, totalProtein = 0;
+    let daysLogged = 0;
+
+    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+      const colOffset = dayIndex * 5;
+      let dayCal = 0;
+      let hasMeals = false;
+
+      for (let row = 6; row < rows.length; row++) {
+        const desc = rows[row]?.[colOffset];
+        if (!desc || desc === "" || desc.toLowerCase().startsWith("total")) continue;
+        hasMeals = true;
+        dayCal += Number(rows[row]?.[colOffset + 1]) || 0;
+        totalFat += Number(rows[row]?.[colOffset + 2]) || 0;
+        totalCarbs += Number(rows[row]?.[colOffset + 3]) || 0;
+        totalProtein += Number(rows[row]?.[colOffset + 4]) || 0;
+      }
+
+      if (hasMeals) {
+        totalCal += dayCal;
+        daysLogged++;
+      }
+    }
+
+    if (daysLogged > 0) {
+      weeks.push({
+        weekStart: tab,
+        averages: {
+          calories: Math.round(totalCal / daysLogged),
+          fat: Math.round(totalFat / daysLogged),
+          carbs: Math.round(totalCarbs / daysLogged),
+          protein: Math.round(totalProtein / daysLogged),
+        },
+        daysLogged,
+      });
+    }
+  }
+
+  return { weeks, goals };
+}
+
 // --- Notes/Goals stored in a dedicated "Notes" tab ---
 
 async function ensureNotesSheet(): Promise<string> {

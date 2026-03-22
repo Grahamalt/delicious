@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import Chat from "@/components/Chat";
 import WeekTable from "@/components/WeekTable";
 import Notes from "@/components/Notes";
+import Trends from "@/components/Trends";
 import { WeekData } from "@/lib/sheets";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "data" | "notes">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "data" | "trends" | "notes">("chat");
   const [weekData, setWeekData] = useState<WeekData | null>(null);
 
   const fetchWeekData = useCallback(async () => {
@@ -56,6 +57,16 @@ export default function Home() {
             This Week
           </button>
           <button
+            onClick={() => setActiveTab("trends")}
+            className={`px-3 py-1 rounded-md text-sm transition-colors ${
+              activeTab === "trends"
+                ? "bg-gray-700 text-white"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            Trends
+          </button>
+          <button
             onClick={() => setActiveTab("notes")}
             className={`px-3 py-1 rounded-md text-sm transition-colors ${
               activeTab === "notes"
@@ -75,6 +86,10 @@ export default function Home() {
         ) : activeTab === "data" ? (
           <div className="h-full overflow-y-auto">
             <WeekTable data={weekData} />
+          </div>
+        ) : activeTab === "trends" ? (
+          <div className="h-full overflow-y-auto">
+            <Trends />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
