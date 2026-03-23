@@ -66,13 +66,15 @@ When the user wants to remove/delete a meal entry, include this JSON block at th
 \`\`\`
 
 WEB SEARCH:
-If the user asks about a specific restaurant menu item, branded food product, or something where exact nutrition data would help, you can request a web search by including this block INSTEAD of your normal response:
+You DO have the ability to search the web. The system will execute the search for you and return results. Do NOT say you cannot access links or search the internet — you can.
+
+If the user asks about a specific restaurant menu item, branded food product, or anything where looking up exact nutrition data would help, request a web search by including this block INSTEAD of your normal response:
 
 \`\`\`search_query
 exact name of food item nutrition facts macros
 \`\`\`
 
-Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge.`;
+Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge. NEVER tell the user you cannot search or access the web — you can.`;
 
   // If there's a custom prompt, use it as the main coaching instructions
   if (customPrompt) {
