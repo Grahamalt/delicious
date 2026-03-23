@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chat, ChatMessage } from "@/lib/llm";
-import { getCurrentWeekData, addMeal, removeMeal, updateDayTotals, getNotes } from "@/lib/sheets";
+import { getCurrentWeekData, addMeal, removeMeal, updateDayTotals, getNotes, getCustomPrompt } from "@/lib/sheets";
 
 export async function POST(req: NextRequest) {
   const { messages } = (await req.json()) as { messages: ChatMessage[] };
 
   try {
-    const [weekData, notes] = await Promise.all([
+    const [weekData, notes, customPrompt] = await Promise.all([
       getCurrentWeekData(),
       getNotes(),
+      getCustomPrompt(),
     ]);
-    const response = await chat(messages, weekData, notes);
+    const response = await chat(messages, weekData, notes, customPrompt);
 
     // If Claude suggested logging a meal, do it
     if (response.mealToLog && response.dateToLog) {

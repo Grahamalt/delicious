@@ -406,6 +406,53 @@ export async function getYearlySummary(): Promise<{ weeks: WeekSummary[]; goals:
   return { weeks, goals };
 }
 
+// --- Custom prompt stored in "Prompt" tab ---
+
+async function ensurePromptSheet(): Promise<string> {
+  const sheets = getSheets();
+  const sheetName = "Prompt";
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+  });
+
+  const existing = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+
+  if (existing) return sheetName;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: sheetName } } }],
+    },
+  });
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["Paste your custom system prompt below this row. Leave empty to use the default."]] },
+  });
+
+  return sheetName;
+}
+
+export async function getCustomPrompt(): Promise<string | null> {
+  const sheetName = await ensurePromptSheet();
+  const sheets = getSheets();
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!A2:A200`,
+  });
+
+  const rows = result.data.values || [];
+  const lines = rows.map((r) => r[0] || "").join("\n").trim();
+  return lines || null;
+}
+
 // --- Progress tracking (weight + photos) stored in "Progress" tab ---
 
 export interface ProgressEntry {

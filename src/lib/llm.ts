@@ -19,7 +19,7 @@ function formatWeekContext(weekData: WeekData): string {
   return context;
 }
 
-function getSystemPrompt(weekData: WeekData, notes: string[] = []): string {
+function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt: string | null = null): string {
   const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
   const dayNames = [
     "Sunday", "Monday", "Tuesday", "Wednesday",
@@ -31,17 +31,16 @@ function getSystemPrompt(weekData: WeekData, notes: string[] = []): string {
     ? `\n## User's Goals & Notes\n${notes.map((n) => `- ${n}`).join("\n")}\n`
     : "";
 
-  return `You are a nutrition assistant helping track daily calories and macros. You have access to the user's food log spreadsheet data.
+  const dataSection = `
+=== SPREADSHEET DATA (SOURCE OF TRUTH) ===
+The following is the user's ACTUAL food log from their spreadsheet. You MUST reference this data when discussing what they've eaten. Do NOT invent, guess, or hallucinate any meals or totals. If the user asks about what they ate, ONLY reference entries listed below.
 
 ${formatWeekContext(weekData)}${notesSection}
-
 Today is ${todayName}, ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
+=== END SPREADSHEET DATA ===`;
 
-Your role:
-1. When the user tells you what they ate, estimate the calories, fat, carbs, and protein. Be accurate and consistent with common nutrition databases.
-2. Give brief, practical advice about hitting their macro goals based on what they've eaten so far today and this week.
-3. When logging a meal, respond with your best macro estimate and include a JSON block so the system can log it to their spreadsheet.
-
+  const mealLogInstructions = `
+MEAL LOGGING INSTRUCTIONS (always follow these):
 When the user wants to log a meal, include this JSON block at the END of your response (after your conversational reply):
 
 \`\`\`meal_log
@@ -55,21 +54,45 @@ When the user wants to log a meal, include this JSON block at the END of your re
 }
 \`\`\`
 
-Use today's date unless the user specifies otherwise. Keep descriptions concise but descriptive (similar to their existing style like "2 servings Fage, 1 tbs honey" or "Kind bar").
+Use today's date (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}) unless the user specifies otherwise.
 
-When the user wants to remove/delete a meal entry, include this JSON block at the END of your response:
+When the user wants to remove/delete a meal entry, include this JSON block at the END:
 
 \`\`\`meal_remove
 {
-  "description": "the meal description to match (or a close partial match)",
+  "description": "the meal description to match",
   "date": "YYYY-MM-DD"
 }
-\`\`\`
+\`\`\``;
 
-Match the description as closely as possible to what's in the spreadsheet. Use today's date unless the user specifies otherwise.
+  // If there's a custom prompt, use it as the main coaching instructions
+  if (customPrompt) {
+    return `${customPrompt}
+
+${dataSection}
+
+${mealLogInstructions}
+
+CRITICAL RULES:
+- ONLY reference meals and totals from the SPREADSHEET DATA above. Never make up or guess what the user ate.
+- When calculating totals, use ONLY the numbers from the spreadsheet data.
+- If the spreadsheet shows no meals for today, say so — do not invent entries.`;
+  }
+
+  // Default prompt
+  return `You are a nutrition assistant helping track daily calories and macros.
+
+${dataSection}
+
+${mealLogInstructions}
+
+Your role:
+1. When the user tells you what they ate, estimate the calories, fat, carbs, and protein. Be accurate and consistent with common nutrition databases.
+2. Give brief, practical advice about hitting their macro goals based on what they've eaten so far today and this week.
+3. When logging a meal, respond with your best macro estimate.
 
 Important guidelines:
-${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging! Use emojis to make the conversation fun and engaging 🎉
+${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging! Use emojis to make the conversation fun and engaging.
 - Give thorough, detailed responses with explanations and tips.
 - Celebrate wins and progress enthusiastically.
 - When giving advice, explain the reasoning behind it.
@@ -77,6 +100,7 @@ ${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging!
 - When estimating, be transparent about uncertainty.
 - Match the user's existing food description style in the log.
 - Consider their weekly averages and remaining days when giving advice.
+- ONLY reference meals and totals from the SPREADSHEET DATA above. Never make up or guess what the user ate.
 - If they ask about strategy, consider their workout schedule (weights vs cardio days).`;
 }
 
@@ -181,9 +205,10 @@ function parseResponse(text: string): ChatResponse {
 export async function chat(
   messages: ChatMessage[],
   weekData: WeekData,
-  notes: string[] = []
+  notes: string[] = [],
+  customPrompt: string | null = null
 ): Promise<ChatResponse> {
-  const systemPrompt = getSystemPrompt(weekData, notes);
+  const systemPrompt = getSystemPrompt(weekData, notes, customPrompt);
   const provider = process.env.LLM_PROVIDER || "claude";
 
   let text: string;
