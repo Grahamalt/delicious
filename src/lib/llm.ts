@@ -231,19 +231,25 @@ export async function chat(
 
   // Check if the model wants to search
   const searchMatch = text.match(/```search_query\s*\n([\s\S]*?)\n```/);
-  if (searchMatch && process.env.TAVILY_API_KEY) {
+  if (searchMatch) {
     const query = searchMatch[1].trim();
-    const { searchWeb } = await import("./search");
-    const searchResults = await searchWeb(query);
 
-    // Re-send with search results
-    const augmentedMessages: ChatMessage[] = [
-      ...messages,
-      { role: "assistant", content: `I need to look up: ${query}` },
-      { role: "user", content: `Here are the search results:\n\n${searchResults}\n\nNow please answer my original question using this data.` },
-    ];
+    if (process.env.TAVILY_API_KEY) {
+      const { searchWeb } = await import("./search");
+      const searchResults = await searchWeb(query);
 
-    text = await callLLM(augmentedMessages, systemPrompt);
+      // Re-send with search results
+      const augmentedMessages: ChatMessage[] = [
+        ...messages,
+        { role: "assistant", content: `I searched for: ${query}` },
+        { role: "user", content: `Here are the search results:\n\n${searchResults}\n\nNow please answer my original question using this data. Do NOT output another search_query block.` },
+      ];
+
+      text = await callLLM(augmentedMessages, systemPrompt);
+    }
+
+    // Always clean search_query blocks from output
+    text = text.replace(/```search_query\s*\n[\s\S]*?\n```/g, "").trim();
   }
 
   return parseResponse(text);
