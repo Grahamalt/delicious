@@ -63,7 +63,16 @@ When the user wants to remove/delete a meal entry, include this JSON block at th
   "description": "the meal description to match",
   "date": "YYYY-MM-DD"
 }
-\`\`\``;
+\`\`\`
+
+WEB SEARCH:
+If the user asks about a specific restaurant menu item, branded food product, or something where exact nutrition data would help, you can request a web search by including this block INSTEAD of your normal response:
+
+\`\`\`search_query
+exact name of food item nutrition facts macros
+\`\`\`
+
+Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge.`;
 
   // If there's a custom prompt, use it as the main coaching instructions
   if (customPrompt) {
@@ -211,11 +220,30 @@ export async function chat(
   const systemPrompt = getSystemPrompt(weekData, notes, customPrompt);
   const provider = process.env.LLM_PROVIDER || "claude";
 
-  let text: string;
-  if (provider === "openai") {
-    text = await chatOpenAI(messages, systemPrompt);
-  } else {
-    text = await chatClaude(messages, systemPrompt);
+  const callLLM = async (msgs: ChatMessage[], sys: string): Promise<string> => {
+    if (provider === "openai") {
+      return chatOpenAI(msgs, sys);
+    }
+    return chatClaude(msgs, sys);
+  };
+
+  let text = await callLLM(messages, systemPrompt);
+
+  // Check if the model wants to search
+  const searchMatch = text.match(/```search_query\s*\n([\s\S]*?)\n```/);
+  if (searchMatch && process.env.TAVILY_API_KEY) {
+    const query = searchMatch[1].trim();
+    const { searchWeb } = await import("./search");
+    const searchResults = await searchWeb(query);
+
+    // Re-send with search results
+    const augmentedMessages: ChatMessage[] = [
+      ...messages,
+      { role: "assistant", content: `I need to look up: ${query}` },
+      { role: "user", content: `Here are the search results:\n\n${searchResults}\n\nNow please answer my original question using this data.` },
+    ];
+
+    text = await callLLM(augmentedMessages, systemPrompt);
   }
 
   return parseResponse(text);
