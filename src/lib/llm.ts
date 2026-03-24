@@ -118,6 +118,7 @@ ${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging!
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  image?: string; // base64 data URL for images
 }
 
 export interface ChatResponse {
@@ -125,6 +126,46 @@ export interface ChatResponse {
   mealToLog?: MealEntry;
   dateToLog?: string;
   mealToRemove?: { description: string; date: string };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildClaudeMessages(messages: ChatMessage[]): any[] {
+  return messages.map((m) => {
+    if (m.image && m.role === "user") {
+      const base64 = m.image.replace(/^data:image\/\w+;base64,/, "");
+      const mediaType = m.image.match(/^data:(image\/\w+);/)?.[1] || "image/jpeg";
+      return {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+          { type: "text", text: m.content || "What's in this meal? Estimate the calories and macros." },
+        ],
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+
+function buildOpenAIMessages(messages: ChatMessage[], systemPrompt: string) {
+  const msgs: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
+    { role: "system", content: systemPrompt },
+  ];
+
+  for (const m of messages) {
+    if (m.image && m.role === "user") {
+      msgs.push({
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: m.image } },
+          { type: "text", text: m.content || "What's in this meal? Estimate the calories and macros." },
+        ],
+      });
+    } else {
+      msgs.push({ role: m.role, content: m.content });
+    }
+  }
+
+  return msgs;
 }
 
 async function chatClaude(
@@ -139,10 +180,8 @@ async function chatClaude(
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
     system: systemPrompt,
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: buildClaudeMessages(messages) as any,
   });
 
   return response.content[0].type === "text" ? response.content[0].text : "";
@@ -159,13 +198,8 @@ async function chatOpenAI(
   const response = await client.chat.completions.create({
     model: process.env.OPENAI_MODEL || "gpt-4o",
     max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-    ],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: buildOpenAIMessages(messages, systemPrompt) as any,
   });
 
   return response.choices[0]?.message?.content || "";

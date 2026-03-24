@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  image?: string;
   logged?: boolean;
   meal?: {
     description: string;
@@ -15,6 +16,23 @@ interface Message {
   };
 }
 
+function compressChatImage(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 800;
+      const scale = Math.min(maxW / img.width, 1);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export default function Chat({
   onMealLogged,
 }: {
@@ -22,9 +40,11 @@ export default function Chat({
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Load chat history from localStorage, clear if it's a new day
   useEffect(() => {
@@ -33,17 +53,20 @@ export default function Chat({
     const today = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
 
     if (saved && savedDate === today) {
-      setMessages(JSON.parse(saved));
+      // Don't restore images from localStorage (too large)
+      const parsed = JSON.parse(saved);
+      setMessages(parsed.map((m: Message) => ({ ...m, image: undefined })));
     } else {
       localStorage.removeItem("chat_messages");
       localStorage.setItem("chat_date", today);
     }
   }, []);
 
-  // Save messages to localStorage whenever they change
+  // Save messages to localStorage whenever they change (without images)
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem("chat_messages", JSON.stringify(messages));
+      const toSave = messages.map((m) => ({ ...m, image: undefined }));
+      localStorage.setItem("chat_messages", JSON.stringify(toSave));
       localStorage.setItem("chat_date", new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" }));
     }
   }, [messages]);
@@ -52,7 +75,6 @@ export default function Chat({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = inputRef.current;
     if (el) {
@@ -61,13 +83,26 @@ export default function Chat({
     }
   }, [input]);
 
-  const send = async () => {
-    if (!input.trim() || loading) return;
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressChatImage(file);
+    setImage(compressed);
+  };
 
-    const userMsg: Message = { role: "user", content: input.trim() };
+  const send = async () => {
+    if ((!input.trim() && !image) || loading) return;
+
+    const userMsg: Message = {
+      role: "user",
+      content: input.trim() || "What's in this meal? Estimate the calories and macros and log it.",
+      image: image || undefined,
+    };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
+    setImage(null);
+    if (fileRef.current) fileRef.current.value = "";
     setLoading(true);
 
     try {
@@ -80,6 +115,7 @@ export default function Chat({
           messages: newMessages.map((m) => ({
             role: m.role,
             content: m.content,
+            ...(m.image ? { image: m.image } : {}),
           })),
         }),
       });
@@ -121,9 +157,7 @@ export default function Chat({
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="text-2xl font-semibold text-gray-300 mb-2">Delicious</div>
             <div className="text-gray-500 text-sm">
-              Tell me what you ate and I&apos;ll log it.
-              <br />
-              Ask me about strategy, meal ideas, or macro advice.
+              Tell me what you ate, snap a photo, or ask for advice.
             </div>
           </div>
         )}
@@ -132,6 +166,9 @@ export default function Chat({
             {msg.role === "user" ? (
               <div className="flex justify-end mb-4 px-2">
                 <div className="bg-gray-700/60 rounded-3xl px-4 py-2.5 max-w-[85%] text-[15px] text-gray-100">
+                  {msg.image && (
+                    <img src={msg.image} alt="Food" className="rounded-xl mb-2 max-w-full max-h-48" />
+                  )}
                   {msg.content}
                 </div>
               </div>
@@ -164,9 +201,38 @@ export default function Chat({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Image preview */}
+      {image && (
+        <div className="px-4 pb-2">
+          <div className="relative inline-block">
+            <img src={image} alt="Preview" className="h-20 rounded-xl" />
+            <button
+              onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = ""; }}
+              className="absolute -top-1 -right-1 bg-gray-700 rounded-full w-5 h-5 flex items-center justify-center text-xs text-gray-300"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="pb-2 pt-2">
         <div className="relative flex items-end bg-gray-800 border border-gray-700 rounded-2xl px-4 py-2">
+          <label className="shrink-0 w-8 h-8 flex items-center justify-center cursor-pointer text-gray-400 hover:text-gray-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhoto}
+              className="hidden"
+            />
+          </label>
           <textarea
             ref={inputRef}
             value={input}
@@ -179,11 +245,11 @@ export default function Chat({
             }}
             placeholder="Message"
             rows={1}
-            className="flex-1 bg-transparent text-[15px] resize-none focus:outline-none placeholder-gray-500 text-gray-100 max-h-[150px]"
+            className="flex-1 bg-transparent text-[15px] resize-none focus:outline-none placeholder-gray-500 text-gray-100 max-h-[150px] ml-1"
           />
           <button
             onClick={send}
-            disabled={loading || !input.trim()}
+            disabled={loading || (!input.trim() && !image)}
             className="ml-2 shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white disabled:bg-gray-600 disabled:text-gray-400 text-black transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

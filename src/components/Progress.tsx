@@ -16,13 +16,13 @@ function compressImage(file: File): Promise<string> {
     const ctx = canvas.getContext("2d")!;
     const img = new Image();
     img.onload = () => {
-      // Resize to max 300px wide, maintain aspect ratio
-      const maxW = 300;
+      // Resize to max 1200px wide, maintain aspect ratio, good quality
+      const maxW = 1200;
       const scale = Math.min(maxW / img.width, 1);
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.5));
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
     img.src = URL.createObjectURL(file);
   });

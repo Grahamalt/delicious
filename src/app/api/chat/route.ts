@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { chat, ChatMessage } from "@/lib/llm";
 import { getCurrentWeekData, addMeal, removeMeal, updateDayTotals, getNotes, getCustomPrompt } from "@/lib/sheets";
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   const { messages } = (await req.json()) as { messages: ChatMessage[] };
 

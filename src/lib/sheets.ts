@@ -27,8 +27,49 @@ function getAuth() {
   const creds = getCredentials();
   return new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file",
+    ],
   });
+}
+
+function getDrive() {
+  return google.drive({ version: "v3", auth: getAuth() });
+}
+
+// Upload an image to Google Drive and return a viewable URL
+export async function uploadImage(base64Data: string): Promise<string> {
+  const drive = getDrive();
+
+  // Strip data URL prefix if present
+  const base64 = base64Data.replace(/^data:image\/\w+;base64,/, "");
+  const buffer = Buffer.from(base64, "base64");
+
+  const response = await drive.files.create({
+    requestBody: {
+      name: `progress_${Date.now()}.jpg`,
+      mimeType: "image/jpeg",
+    },
+    media: {
+      mimeType: "image/jpeg",
+      body: require("stream").Readable.from(buffer),
+    },
+    fields: "id",
+  });
+
+  const fileId = response.data.id!;
+
+  // Make it viewable by anyone with the link
+  await drive.permissions.create({
+    fileId,
+    requestBody: {
+      role: "reader",
+      type: "anyone",
+    },
+  });
+
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
 }
 
 function getSheets() {
@@ -519,12 +560,18 @@ export async function addProgress(entry: ProgressEntry): Promise<void> {
   const sheetName = await ensureProgressSheet();
   const sheets = getSheets();
 
+  // If photo is base64, upload to Google Drive and store URL instead
+  let photoValue = entry.photo || "";
+  if (photoValue && photoValue.startsWith("data:")) {
+    photoValue = await uploadImage(photoValue);
+  }
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range: `'${sheetName}'!A:E`,
     valueInputOption: "RAW",
     requestBody: {
-      values: [[entry.date, entry.time, entry.weight || "", entry.photo || "", entry.note]],
+      values: [[entry.date, entry.time, entry.weight || "", photoValue, entry.note]],
     },
   });
 }
