@@ -560,11 +560,8 @@ export async function addProgress(entry: ProgressEntry): Promise<void> {
   const sheetName = await ensureProgressSheet();
   const sheets = getSheets();
 
-  // If photo is base64, upload to Google Drive and store URL instead
-  let photoValue = entry.photo || "";
-  if (photoValue && photoValue.startsWith("data:")) {
-    photoValue = await uploadImage(photoValue);
-  }
+  // Store photo as base64 directly in the sheet
+  const photoValue = entry.photo || "";
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
