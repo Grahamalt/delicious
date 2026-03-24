@@ -16,13 +16,20 @@ function compressImage(file: File): Promise<string> {
     const ctx = canvas.getContext("2d")!;
     const img = new Image();
     img.onload = () => {
-      // Resize to max 500px wide, good quality that fits in a sheet cell
-      const maxW = 500;
+      // Resize to fit in a Google Sheets cell (max ~50K chars base64 ≈ ~36KB)
+      const maxW = 400;
       const scale = Math.min(maxW / img.width, 1);
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.65));
+      let quality = 0.6;
+      let result = canvas.toDataURL("image/jpeg", quality);
+      // Keep reducing quality until it fits in a sheet cell
+      while (result.length > 49000 && quality > 0.1) {
+        quality -= 0.1;
+        result = canvas.toDataURL("image/jpeg", quality);
+      }
+      resolve(result);
     };
     img.src = URL.createObjectURL(file);
   });
@@ -127,18 +134,25 @@ export default function Progress() {
       note,
     };
 
-    const res = await fetch("/api/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry),
-    });
+    try {
+      const res = await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
 
-    if (res.ok) {
-      setEntries([...entries, entry]);
-      setWeight("");
-      setNote("");
-      setPhoto(null);
-      if (fileRef.current) fileRef.current.value = "";
+      if (res.ok) {
+        setEntries([...entries, entry]);
+        setWeight("");
+        setNote("");
+        setPhoto(null);
+        if (fileRef.current) fileRef.current.value = "";
+      } else {
+        const err = await res.json();
+        alert(`Failed to save: ${err.error || "Unknown error"}`);
+      }
+    } catch (err) {
+      alert(`Failed to save: ${err instanceof Error ? err.message : "Network error"}`);
     }
 
     setSaving(false);
