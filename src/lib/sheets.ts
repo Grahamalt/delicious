@@ -569,11 +569,8 @@ export async function addProgress(entry: ProgressEntry): Promise<void> {
   const sheetName = await ensureProgressSheet();
   const sheets = getSheets();
 
-  // Upload photo to Google Drive if available, store URL in sheet
-  let photoValue = entry.photo || "";
-  if (photoValue && photoValue.startsWith("data:") && DRIVE_FOLDER_ID) {
-    photoValue = await uploadImage(photoValue);
-  }
+  // Store photo as base64 directly in the sheet
+  const photoValue = entry.photo || "";
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
