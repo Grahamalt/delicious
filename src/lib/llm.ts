@@ -2,18 +2,31 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { WeekData, MealEntry } from "./sheets";
 
-function formatWeekContext(weekData: WeekData): string {
-  let context = `## Current Week: ${weekData.weekStart}\n\n`;
-  context += `**Goals:** ${weekData.goals.calories} cal, ${weekData.goals.fat}g fat, ${weekData.goals.carbs}g carbs, ${weekData.goals.protein}g protein\n`;
-  context += `**Week Average So Far:** ${weekData.averages.calories} cal, ${weekData.averages.fat}g fat, ${weekData.averages.carbs}g carbs, ${weekData.averages.protein}g protein\n\n`;
+function formatWeekContext(weekData: WeekData, todayDate: string): string {
+  let context = `WEEK: ${weekData.weekStart}\n`;
+  context += `GOALS: ${weekData.goals.calories} cal | ${weekData.goals.fat}g fat | ${weekData.goals.carbs}g carbs | ${weekData.goals.protein}g protein\n`;
+  context += `WEEK AVERAGE (logged days only): ${weekData.averages.calories} cal | ${weekData.averages.fat}g fat | ${weekData.averages.carbs}g carbs | ${weekData.averages.protein}g protein\n\n`;
 
   for (const day of weekData.days) {
-    if (day.meals.length === 0) continue;
-    context += `### ${day.dayLabel} (${day.date})\n`;
-    for (const meal of day.meals) {
-      context += `- ${meal.description}: ${meal.calories} cal, ${meal.fat}g F, ${meal.carbs}g C, ${meal.protein}g P\n`;
+    const isToday = day.date === todayDate;
+    const marker = isToday ? " <<<< TODAY" : "";
+
+    if (day.meals.length === 0) {
+      context += `[${day.dayLabel}] ${day.date}${marker} — NO MEALS LOGGED\n`;
+      continue;
     }
-    context += `**Day Total:** ${day.totals.calories} cal, ${day.totals.fat}g F, ${day.totals.carbs}g C, ${day.totals.protein}g P\n\n`;
+
+    context += `[${day.dayLabel}] ${day.date}${marker}\n`;
+    for (let i = 0; i < day.meals.length; i++) {
+      const meal = day.meals[i];
+      context += `  ${i + 1}. ${meal.description} = ${meal.calories} cal, ${meal.fat}g fat, ${meal.carbs}g carbs, ${meal.protein}g protein\n`;
+    }
+    context += `  TOTAL: ${day.totals.calories} cal | ${day.totals.fat}g fat | ${day.totals.carbs}g carbs | ${day.totals.protein}g protein\n`;
+
+    if (isToday) {
+      context += `  REMAINING TODAY: ${weekData.goals.calories - day.totals.calories} cal | ${weekData.goals.fat - day.totals.fat}g fat | ${weekData.goals.carbs - day.totals.carbs}g carbs | ${weekData.goals.protein - day.totals.protein}g protein\n`;
+    }
+    context += `\n`;
   }
 
   return context;
@@ -31,12 +44,24 @@ function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt:
     ? `\n## User's Goals & Notes\n${notes.map((n) => `- ${n}`).join("\n")}\n`
     : "";
 
-  const dataSection = `
-=== SPREADSHEET DATA (SOURCE OF TRUTH) ===
-The following is the user's ACTUAL food log from their spreadsheet. You MUST reference this data when discussing what they've eaten. Do NOT invent, guess, or hallucinate any meals or totals. If the user asks about what they ate, ONLY reference entries listed below.
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const currentTime = today.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
 
-${formatWeekContext(weekData)}${notesSection}
-Today is ${todayName}, ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
+  const dataSection = `
+=== CURRENT DATE AND TIME (AUTHORITATIVE — DO NOT GUESS) ===
+TODAY IS: ${todayName}, ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+TODAY'S DATE: ${todayISO}
+CURRENT TIME: ${currentTime} Eastern
+DO NOT use any other date. If the user says "today", it means ${todayISO}. If the user says "yesterday", it means the day before ${todayISO}.
+=== END DATE ===
+
+=== SPREADSHEET DATA (SOURCE OF TRUTH — DO NOT FABRICATE) ===
+The data below is EXACTLY what the user's spreadsheet contains right now. These numbers are PRECISE.
+When the user asks "what did I eat today" or "what are my totals", you MUST use ONLY the numbers below.
+Do NOT round differently, do NOT add meals that aren't listed, do NOT change any values.
+If a day shows "NO MEALS LOGGED", tell the user that — do not guess what they might have eaten.
+
+${formatWeekContext(weekData, todayISO)}${notesSection}
 === END SPREADSHEET DATA ===`;
 
   const mealLogInstructions = `
@@ -54,7 +79,7 @@ When the user wants to log a meal, include this JSON block at the END of your re
 }
 \`\`\`
 
-Use today's date (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}) unless the user specifies otherwise.
+Use today's date (${todayISO}) unless the user specifies otherwise. TODAY IS ${todayISO} — do not use any other date for "today".
 
 When the user wants to remove/delete a meal entry, include this JSON block at the END:
 
