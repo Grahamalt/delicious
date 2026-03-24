@@ -29,7 +29,7 @@ function getAuth() {
     credentials: creds,
     scopes: [
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive",
     ],
   });
 }
@@ -59,18 +59,24 @@ export async function uploadImage(base64Data: string): Promise<string> {
       body: require("stream").Readable.from(buffer),
     },
     fields: "id",
+    supportsAllDrives: true,
   });
 
   const fileId = response.data.id!;
 
   // Make it viewable by anyone with the link
-  await drive.permissions.create({
-    fileId,
-    requestBody: {
-      role: "reader",
-      type: "anyone",
-    },
-  });
+  try {
+    await drive.permissions.create({
+      fileId,
+      requestBody: {
+        role: "reader",
+        type: "anyone",
+      },
+      supportsAllDrives: true,
+    });
+  } catch {
+    // Folder may already have public sharing set
+  }
 
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
 }
