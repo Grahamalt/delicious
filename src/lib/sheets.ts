@@ -38,7 +38,9 @@ function getDrive() {
   return google.drive({ version: "v3", auth: getAuth() });
 }
 
-// Upload an image to Google Drive and return a viewable URL
+const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "";
+
+// Upload an image to Google Drive shared folder and return a viewable URL
 export async function uploadImage(base64Data: string): Promise<string> {
   const drive = getDrive();
 
@@ -50,6 +52,7 @@ export async function uploadImage(base64Data: string): Promise<string> {
     requestBody: {
       name: `progress_${Date.now()}.jpg`,
       mimeType: "image/jpeg",
+      parents: DRIVE_FOLDER_ID ? [DRIVE_FOLDER_ID] : undefined,
     },
     media: {
       mimeType: "image/jpeg",
@@ -69,7 +72,7 @@ export async function uploadImage(base64Data: string): Promise<string> {
     },
   });
 
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
 }
 
 function getSheets() {
@@ -560,8 +563,11 @@ export async function addProgress(entry: ProgressEntry): Promise<void> {
   const sheetName = await ensureProgressSheet();
   const sheets = getSheets();
 
-  // Store photo as base64 directly in the sheet
-  const photoValue = entry.photo || "";
+  // Upload photo to Google Drive if available, store URL in sheet
+  let photoValue = entry.photo || "";
+  if (photoValue && photoValue.startsWith("data:") && DRIVE_FOLDER_ID) {
+    photoValue = await uploadImage(photoValue);
+  }
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
