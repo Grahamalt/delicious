@@ -33,7 +33,14 @@ function formatWeekContext(weekData: WeekData, todayDate: string): string {
 }
 
 function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt: string | null = null): string {
-  const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const tz = process.env.APP_TIMEZONE || "America/New_York";
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const pts = fmt.formatToParts(new Date());
+  const g = (t: string) => pts.find((p) => p.type === t)?.value || "0";
+  const today = new Date(parseInt(g("year")), parseInt(g("month")) - 1, parseInt(g("day")), parseInt(g("hour")), parseInt(g("minute")));
   const dayNames = [
     "Sunday", "Monday", "Tuesday", "Wednesday",
     "Thursday", "Friday", "Saturday",
@@ -45,7 +52,7 @@ function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt:
     : "";
 
   const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const currentTime = today.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  const currentTime = `${today.getHours() % 12 || 12}:${String(today.getMinutes()).padStart(2, "0")} ${today.getHours() >= 12 ? "PM" : "AM"}`;
 
   const dataSection = `
 === CURRENT DATE AND TIME (AUTHORITATIVE — DO NOT GUESS) ===

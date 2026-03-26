@@ -118,10 +118,29 @@ export interface WeekData {
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
-// Get current date in US Eastern time
-function nowEastern(): Date {
-  const str = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-  return new Date(str);
+// Get current date in the configured timezone (defaults to US Eastern)
+function nowLocal(): Date {
+  const tz = process.env.APP_TIMEZONE || "America/New_York";
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "0";
+  return new Date(
+    parseInt(get("year")),
+    parseInt(get("month")) - 1,
+    parseInt(get("day")),
+    parseInt(get("hour")),
+    parseInt(get("minute")),
+    parseInt(get("second"))
+  );
 }
 
 // Get the sheet name for a given week (using the Sunday date)
@@ -254,7 +273,7 @@ async function ensureWeekSheet(date: Date): Promise<string> {
 
 // Read the current week's data
 export async function getCurrentWeekData(date?: Date): Promise<WeekData> {
-  const targetDate = date || nowEastern();
+  const targetDate = date || nowLocal();
   const sheetName = await ensureWeekSheet(targetDate);
   const sheets = getSheets();
 
@@ -374,7 +393,7 @@ export async function getYearlySummary(): Promise<{ weeks: WeekSummary[]; goals:
     spreadsheetId: SHEET_ID,
   });
 
-  const now = nowEastern();
+  const now = nowLocal();
   const currentYear = now.getFullYear();
   const allTabs = spreadsheet.data.sheets?.map((s) => s.properties?.title || "") || [];
 
