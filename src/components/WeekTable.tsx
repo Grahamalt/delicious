@@ -30,7 +30,9 @@ export default function WeekTable({ data }: { data: WeekData | null }) {
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  // Use Eastern time for "today" highlight, not UTC
+  const eastern = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const today = `${eastern.getFullYear()}-${String(eastern.getMonth() + 1).padStart(2, "0")}-${String(eastern.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="space-y-3">
