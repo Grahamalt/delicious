@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { WeekData, MealEntry } from "./sheets";
+import { WeekData, MealEntry, searchMeals, getMealsByDateRange } from "./sheets";
 
 function formatWeekContext(weekData: WeekData, todayDate: string): string {
   let context = `WEEK: ${weekData.weekStart}\n`;
@@ -106,7 +106,22 @@ If the user asks about a specific restaurant menu item, branded food product, or
 exact name of food item nutrition facts macros
 \`\`\`
 
-Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge. NEVER tell the user you cannot search or access the web — you can.`;
+Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge. NEVER tell the user you cannot search or access the web — you can.
+
+MEAL HISTORY LOOKUP:
+You have access to the user's FULL meal history database — not just the current week. When the user asks about past meals, previous weeks, patterns, or anything beyond the current week shown above, you can query the database.
+
+To search for a food item across all history:
+\`\`\`db_query
+{"type": "search", "query": "chicken"}
+\`\`\`
+
+To look up meals for a specific date range:
+\`\`\`db_query
+{"type": "date_range", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
+\`\`\`
+
+The system will return the results and you can then answer the user's question. Use this whenever the user asks about past meals, trends, or anything not in the current week data above. Do NOT tell the user you can't access past data — you can.`;
 
   // If there's a custom prompt, use it as the main coaching instructions
   if (customPrompt) {
@@ -283,7 +298,7 @@ export async function chat(
   messages: ChatMessage[],
   weekData: WeekData,
   notes: string[] = [],
-  customPrompt: string | null = null
+  customPrompt: string | null = null,
 ): Promise<ChatResponse> {
   const systemPrompt = getSystemPrompt(weekData, notes, customPrompt);
   const provider = process.env.LLM_PROVIDER || "claude";
@@ -318,6 +333,49 @@ export async function chat(
 
     // Always clean search_query blocks from output
     text = text.replace(/```search_query\s*\n[\s\S]*?\n```/g, "").trim();
+  }
+
+  // Check if the model wants to query the meal database
+  const dbMatch = text.match(/```db_query\s*\n([\s\S]*?)\n```/);
+  if (dbMatch) {
+    try {
+      const query = JSON.parse(dbMatch[1]);
+      let dbResults = "";
+
+      if (query.type === "search" && query.query) {
+        const results = await searchMeals(query.query);
+        if (results.length === 0) {
+          dbResults = `No meals found matching "${query.query}".`;
+        } else {
+          dbResults = results
+            .map((m) => `${m.date}: ${m.description} = ${m.calories} cal, ${m.fat}g fat, ${m.carbs}g carbs, ${m.protein}g protein`)
+            .join("\n");
+        }
+      } else if (query.type === "date_range" && query.start && query.end) {
+        const results = await getMealsByDateRange(query.start, query.end);
+        if (results.length === 0) {
+          dbResults = `No meals found between ${query.start} and ${query.end}.`;
+        } else {
+          dbResults = results
+            .map((m) => `${m.date}: ${m.description} = ${m.calories} cal, ${m.fat}g fat, ${m.carbs}g carbs, ${m.protein}g protein`)
+            .join("\n");
+        }
+      }
+
+      if (dbResults) {
+        const augmentedMessages: ChatMessage[] = [
+          ...messages,
+          { role: "assistant", content: `I looked up the meal history.` },
+          { role: "user", content: `Here are the database results:\n\n${dbResults}\n\nNow please answer my original question using this data. Do NOT output another db_query block.` },
+        ];
+
+        text = await callLLM(augmentedMessages, systemPrompt);
+      }
+    } catch {
+      // Invalid JSON, continue with original response
+    }
+
+    text = text.replace(/```db_query\s*\n[\s\S]*?\n```/g, "").trim();
   }
 
   return parseResponse(text);
