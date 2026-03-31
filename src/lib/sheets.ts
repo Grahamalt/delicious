@@ -340,17 +340,17 @@ export async function addProgress(entry: ProgressEntry): Promise<void> {
   });
 }
 
-// ---- Image upload (Google Drive) ----
-// Keep this for now - progress photos still upload to Drive
+// ---- Image upload (Supabase Storage) ----
 
 export async function uploadImage(base64Data: string): Promise<string> {
-  // Store in Supabase Storage instead if configured, otherwise return data URL
   const base64 = base64Data.replace(/^data:image\/\w+;base64,/, "");
+  const filename = `progress_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
 
   const { data, error } = await getSupabase().storage
     .from("progress-photos")
-    .upload(`progress_${Date.now()}.jpg`, Buffer.from(base64, "base64"), {
+    .upload(filename, Buffer.from(base64, "base64"), {
       contentType: "image/jpeg",
+      upsert: false,
     });
 
   if (error || !data) {

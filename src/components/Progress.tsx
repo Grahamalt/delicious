@@ -16,19 +16,12 @@ function compressImage(file: File): Promise<string> {
     const ctx = canvas.getContext("2d")!;
     const img = new Image();
     img.onload = () => {
-      // Resize to fit in a Google Sheets cell (max ~50K chars base64)
-      const maxW = 400;
+      const maxW = 1200;
       const scale = Math.min(maxW / img.width, 1);
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      let quality = 0.6;
-      let result = canvas.toDataURL("image/jpeg", quality);
-      while (result.length > 49000 && quality > 0.1) {
-        quality -= 0.1;
-        result = canvas.toDataURL("image/jpeg", quality);
-      }
-      resolve(result);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
     img.src = URL.createObjectURL(file);
   });
