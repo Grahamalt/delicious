@@ -2,18 +2,23 @@
 
 import { useState, useRef, useEffect } from "react";
 
+interface DailyEntry {
+  date: string;
+  description: string;
+  calories: number;
+  fat: number;
+  carbs: number;
+  protein: number;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
   image?: string;
   logged?: boolean;
-  meal?: {
-    description: string;
-    calories: number;
-    fat: number;
-    carbs: number;
-    protein: number;
-  };
+  removed?: boolean;
+  intent?: "override" | "merge";
+  entry?: DailyEntry;
 }
 
 function compressChatImage(file: File): Promise<string> {
@@ -130,11 +135,13 @@ export default function Chat({
         role: "assistant",
         content: data.message,
         logged: data.logged,
-        meal: data.meal,
+        removed: data.removed,
+        intent: data.intent,
+        entry: data.entry || undefined,
       };
       setMessages([...newMessages, assistantMsg]);
 
-      if (data.logged) {
+      if (data.logged || data.removed) {
         onMealLogged();
       }
     } catch (err) {
@@ -177,12 +184,17 @@ export default function Chat({
                 <div className="prose prose-invert prose-sm max-w-none text-[15px] leading-relaxed text-gray-200">
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
-                {msg.logged && msg.meal && (
+                {msg.logged && msg.entry && (
                   <div className="mt-2 ml-0 inline-flex items-center gap-1.5 bg-green-900/30 border border-green-800/40 rounded-full px-3 py-1 text-xs text-green-400">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
-                    Logged: {msg.meal.description} ({msg.meal.calories} cal, {msg.meal.fat}f, {msg.meal.carbs}c, {msg.meal.protein}p)
+                    {msg.intent === "merge" ? "Merged" : "Logged"} {msg.entry.date}: {msg.entry.calories} cal / {msg.entry.fat}f / {msg.entry.carbs}c / {msg.entry.protein}p
+                  </div>
+                )}
+                {msg.removed && (
+                  <div className="mt-2 ml-0 inline-flex items-center gap-1.5 bg-red-900/30 border border-red-800/40 rounded-full px-3 py-1 text-xs text-red-400">
+                    Removed daily entry
                   </div>
                 )}
               </div>

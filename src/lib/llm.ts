@@ -1,38 +1,51 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { WeekData, MealEntry, searchMeals, getMealsByDateRange } from "./sheets";
+import { DailyEntry, DailyGoals, getDailyRange, getTodayISO, getGoals } from "./daily";
+import { getNotes, getCustomPrompt } from "./sheets";
 
-function formatWeekContext(weekData: WeekData, todayDate: string): string {
-  let context = `WEEK: ${weekData.weekStart}\n`;
-  context += `GOALS: ${weekData.goals.calories} cal | ${weekData.goals.fat}g fat | ${weekData.goals.carbs}g carbs | ${weekData.goals.protein}g protein\n`;
-  context += `WEEK AVERAGE (logged days only): ${weekData.averages.calories} cal | ${weekData.averages.fat}g fat | ${weekData.averages.carbs}g carbs | ${weekData.averages.protein}g protein\n\n`;
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-  for (const day of weekData.days) {
-    const isToday = day.date === todayDate;
+function formatDailyContext(entries: DailyEntry[], goals: DailyGoals, todayDate: string): string {
+  const map = new Map(entries.map((e) => [e.date, e]));
+  let context = `GOALS: ${goals.calories} cal | ${goals.fat}g fat | ${goals.carbs}g carbs | ${goals.protein}g protein\n\n`;
+
+  // Build last 14 days
+  const lines: string[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const isToday = iso === todayDate;
+    const e = map.get(iso);
     const marker = isToday ? " <<<< TODAY" : "";
-
-    if (day.meals.length === 0) {
-      context += `[${day.dayLabel}] ${day.date}${marker} — NO MEALS LOGGED\n`;
-      continue;
+    if (!e) {
+      lines.push(`[${iso}]${marker} — NO ENTRY`);
+    } else {
+      lines.push(
+        `[${iso}]${marker} ${e.calories} cal | ${e.fat}f | ${e.carbs}c | ${e.protein}p — ${e.description || "(no description)"}`
+      );
     }
+  }
+  context += lines.join("\n") + "\n";
 
-    context += `[${day.dayLabel}] ${day.date}${marker}\n`;
-    for (let i = 0; i < day.meals.length; i++) {
-      const meal = day.meals[i];
-      context += `  ${i + 1}. ${meal.description} = ${meal.calories} cal, ${meal.fat}g fat, ${meal.carbs}g carbs, ${meal.protein}g protein\n`;
-    }
-    context += `  TOTAL: ${day.totals.calories} cal | ${day.totals.fat}g fat | ${day.totals.carbs}g carbs | ${day.totals.protein}g protein\n`;
-
-    if (isToday) {
-      context += `  REMAINING TODAY: ${weekData.goals.calories - day.totals.calories} cal | ${weekData.goals.fat - day.totals.fat}g fat | ${weekData.goals.carbs - day.totals.carbs}g carbs | ${weekData.goals.protein - day.totals.protein}g protein\n`;
-    }
-    context += `\n`;
+  const todayEntry = map.get(todayDate);
+  if (todayEntry) {
+    context += `\nREMAINING TODAY: ${goals.calories - todayEntry.calories} cal | ${goals.fat - todayEntry.fat}g fat | ${goals.carbs - todayEntry.carbs}g carbs | ${goals.protein - todayEntry.protein}g protein\n`;
   }
 
   return context;
 }
 
-function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt: string | null = null): string {
+function getSystemPrompt(
+  entries: DailyEntry[],
+  goals: DailyGoals,
+  notes: string[] = [],
+  customPrompt: string | null = null
+): string {
   const tz = process.env.APP_TIMEZONE || "America/New_York";
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
@@ -41,138 +54,108 @@ function getSystemPrompt(weekData: WeekData, notes: string[] = [], customPrompt:
   const pts = fmt.formatToParts(new Date());
   const g = (t: string) => pts.find((p) => p.type === t)?.value || "0";
   const today = new Date(parseInt(g("year")), parseInt(g("month")) - 1, parseInt(g("day")), parseInt(g("hour")), parseInt(g("minute")));
-  const dayNames = [
-    "Sunday", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday",
-  ];
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const todayName = dayNames[today.getDay()];
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const currentTime = `${today.getHours() % 12 || 12}:${String(today.getMinutes()).padStart(2, "0")} ${today.getHours() >= 12 ? "PM" : "AM"}`;
 
   const notesSection = notes.length > 0
     ? `\n## User's Goals & Notes\n${notes.map((n) => `- ${n}`).join("\n")}\n`
     : "";
-
-  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const currentTime = `${today.getHours() % 12 || 12}:${String(today.getMinutes()).padStart(2, "0")} ${today.getHours() >= 12 ? "PM" : "AM"}`;
 
   const dataSection = `
 === CURRENT DATE AND TIME (AUTHORITATIVE — DO NOT GUESS) ===
 TODAY IS: ${todayName}, ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
 TODAY'S DATE: ${todayISO}
 CURRENT TIME: ${currentTime} Eastern
-DO NOT use any other date. If the user says "today", it means ${todayISO}. If the user says "yesterday", it means the day before ${todayISO}.
 === END DATE ===
 
-=== SPREADSHEET DATA (SOURCE OF TRUTH — DO NOT FABRICATE) ===
-The data below is EXACTLY what the user's spreadsheet contains right now. These numbers are PRECISE.
-When the user asks "what did I eat today" or "what are my totals", you MUST use ONLY the numbers below.
-Do NOT round differently, do NOT add meals that aren't listed, do NOT change any values.
-If a day shows "NO MEALS LOGGED", tell the user that — do not guess what they might have eaten.
+=== DAILY ENTRIES (SOURCE OF TRUTH) ===
+This app stores ONE entry per day with estimated total macros and a description of what was eaten. The user logs their summary at end of day. The numbers below are the user's own estimates — treat them as authoritative for past days.
 
-${formatWeekContext(weekData, todayISO)}${notesSection}
-=== END SPREADSHEET DATA ===`;
+${formatDailyContext(entries, goals, todayISO)}${notesSection}
+=== END DATA ===`;
 
-  const mealLogInstructions = `
-MEAL LOGGING INSTRUCTIONS (always follow these):
-When the user wants to log a meal, include this JSON block at the END of your response (after your conversational reply):
+  const loggingInstructions = `
+DAILY LOGGING INSTRUCTIONS:
+The user can ask you to log a daily summary. When they do, include this JSON block at the END of your response:
 
-\`\`\`meal_log
+\`\`\`daily_log
 {
-  "description": "Brief meal description",
-  "calories": 500,
-  "fat": 20,
-  "carbs": 45,
-  "protein": 35,
-  "date": "YYYY-MM-DD"
+  "date": "${todayISO}",
+  "calories": 2400,
+  "fat": 70,
+  "carbs": 220,
+  "protein": 165,
+  "description": "concise comma-separated food list",
+  "intent": "override"
 }
 \`\`\`
 
-Use today's date (${todayISO}) unless the user specifies otherwise. TODAY IS ${todayISO} — do not use any other date for "today".
+Rules:
+- "intent": use "override" by default (replaces the day). Use "merge" only if the user says "add", "also", "plus", "additionally" — then macros are ADDED to whatever's already there.
+- Default date is today (${todayISO}). Use a different date only if the user names one.
+- If the user wants to delete a day's entry, use this block:
 
-When the user wants to remove/delete a meal entry, include this JSON block at the END:
+\`\`\`daily_remove
+{"date": "${todayISO}"}
+\`\`\`
 
-\`\`\`meal_remove
-{
-  "description": "the meal description to match",
-  "date": "YYYY-MM-DD"
-}
+HISTORY LOOKUP:
+You can query the daily entries database for ranges beyond the 14 days shown above:
+
+\`\`\`db_query
+{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
 \`\`\`
 
 WEB SEARCH:
-You DO have the ability to search the web. The system will execute the search for you and return results. Do NOT say you cannot access links or search the internet — you can.
-
-If the user asks about a specific restaurant menu item, branded food product, or anything where looking up exact nutrition data would help, request a web search by including this block INSTEAD of your normal response:
+You can search the web for restaurant menus or branded product nutrition data:
 
 \`\`\`search_query
-exact name of food item nutrition facts macros
+exact food item nutrition facts
 \`\`\`
 
-Only use search when exact data matters (restaurant items, specific branded products). For common foods like "chicken breast" or "banana", just estimate from your knowledge. NEVER tell the user you cannot search or access the web — you can.
+Only use search when exact data matters. For common foods, estimate from your knowledge.`;
 
-MEAL HISTORY LOOKUP:
-You have access to the user's FULL meal history database — not just the current week. When the user asks about past meals, previous weeks, patterns, or anything beyond the current week shown above, you can query the database.
-
-To search for a food item across all history:
-\`\`\`db_query
-{"type": "search", "query": "chicken"}
-\`\`\`
-
-To look up meals for a specific date range:
-\`\`\`db_query
-{"type": "date_range", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-\`\`\`
-
-The system will return the results and you can then answer the user's question. Use this whenever the user asks about past meals, trends, or anything not in the current week data above. Do NOT tell the user you can't access past data — you can.`;
-
-  // If there's a custom prompt, use it as the main coaching instructions
   if (customPrompt) {
-    return `${customPrompt}
-
-${dataSection}
-
-${mealLogInstructions}
-
-CRITICAL RULES:
-- ONLY reference meals and totals from the SPREADSHEET DATA above. Never make up or guess what the user ate.
-- When calculating totals, use ONLY the numbers from the spreadsheet data.
-- If the spreadsheet shows no meals for today, say so — do not invent entries.`;
+    return `${customPrompt}\n\n${dataSection}\n\n${loggingInstructions}\n\nCRITICAL: Reference only the daily entries shown. Never invent macros for past days.`;
   }
 
-  // Default prompt
-  return `You are a nutrition assistant helping track daily calories and macros.
+  return `You are a nutrition assistant. The user logs ONE daily summary per day with estimated total macros. Help them estimate, log, query, and strategize against their macro goals.
 
 ${dataSection}
 
-${mealLogInstructions}
+${loggingInstructions}
 
-Your role:
-1. When the user tells you what they ate, estimate the calories, fat, carbs, and protein. Be accurate and consistent with common nutrition databases.
-2. Give brief, practical advice about hitting their macro goals based on what they've eaten so far today and this week.
-3. When logging a meal, respond with your best macro estimate.
-
-Important guidelines:
-${process.env.CHAT_STYLE === "friendly" ? `- Be warm, friendly, and encouraging! Use emojis to make the conversation fun and engaging.
-- Give thorough, detailed responses with explanations and tips.
-- Celebrate wins and progress enthusiastically.
-- When giving advice, explain the reasoning behind it.
-- Use bullet points and structure to make responses easy to read.` : `- Be concise in your responses. No need for long explanations unless asked.`}
+Guidelines:
+${process.env.CHAT_STYLE === "friendly"
+  ? `- Be warm and encouraging. Use emojis and structure your responses with bullets when helpful.`
+  : `- Be concise. No long explanations unless asked.`}
 - When estimating, be transparent about uncertainty.
-- Match the user's existing food description style in the log.
-- Consider their weekly averages and remaining days when giving advice.
-- ONLY reference meals and totals from the SPREADSHEET DATA above. Never make up or guess what the user ate.
-- If they ask about strategy, consider their workout schedule (weights vs cardio days).`;
+- Reference only the daily entries shown — never invent macros for past days.
+- When advising, consider weekly averages and remaining days.`;
 }
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  image?: string; // base64 data URL for images
+  image?: string;
+}
+
+export interface DailyLogIntent {
+  date: string;
+  calories: number;
+  fat: number;
+  carbs: number;
+  protein: number;
+  description: string;
+  intent: "override" | "merge";
 }
 
 export interface ChatResponse {
   message: string;
-  mealToLog?: MealEntry;
-  dateToLog?: string;
-  mealToRemove?: { description: string; date: string };
+  dailyLog?: DailyLogIntent;
+  dailyRemove?: { date: string };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -197,7 +180,6 @@ function buildOpenAIMessages(messages: ChatMessage[], systemPrompt: string) {
   const msgs: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
     { role: "system", content: systemPrompt },
   ];
-
   for (const m of messages) {
     if (m.image && m.role === "user") {
       msgs.push({
@@ -211,18 +193,11 @@ function buildOpenAIMessages(messages: ChatMessage[], systemPrompt: string) {
       msgs.push({ role: m.role, content: m.content });
     }
   }
-
   return msgs;
 }
 
-async function chatClaude(
-  messages: ChatMessage[],
-  systemPrompt: string
-): Promise<string> {
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
-
+async function chatClaude(messages: ChatMessage[], systemPrompt: string): Promise<string> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const response = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
@@ -230,153 +205,119 @@ async function chatClaude(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: buildClaudeMessages(messages) as any,
   });
-
   return response.content[0].type === "text" ? response.content[0].text : "";
 }
 
-async function chatOpenAI(
-  messages: ChatMessage[],
-  systemPrompt: string
-): Promise<string> {
-  const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
+async function chatOpenAI(messages: ChatMessage[], systemPrompt: string): Promise<string> {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const response = await client.chat.completions.create({
     model: process.env.OPENAI_MODEL || "gpt-4o",
     max_tokens: 1024,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: buildOpenAIMessages(messages, systemPrompt) as any,
   });
-
   return response.choices[0]?.message?.content || "";
 }
 
 function parseResponse(text: string): ChatResponse {
-  const mealMatch = text.match(/```meal_log\s*\n([\s\S]*?)\n```/);
-  let mealToLog: MealEntry | undefined;
-  let dateToLog: string | undefined;
+  let dailyLog: DailyLogIntent | undefined;
+  let dailyRemove: { date: string } | undefined;
 
-  if (mealMatch) {
+  const logMatch = text.match(/```daily_log\s*\n([\s\S]*?)\n```/);
+  if (logMatch) {
     try {
-      const parsed = JSON.parse(mealMatch[1]);
-      mealToLog = {
-        description: parsed.description,
-        calories: parsed.calories,
-        fat: parsed.fat,
-        carbs: parsed.carbs,
-        protein: parsed.protein,
+      const parsed = JSON.parse(logMatch[1]);
+      dailyLog = {
+        date: parsed.date,
+        calories: Number(parsed.calories) || 0,
+        fat: Number(parsed.fat) || 0,
+        carbs: Number(parsed.carbs) || 0,
+        protein: Number(parsed.protein) || 0,
+        description: parsed.description || "",
+        intent: parsed.intent === "merge" ? "merge" : "override",
       };
-      dateToLog = parsed.date;
     } catch {
-      // Invalid JSON, skip logging
+      // ignore
     }
   }
 
-  // Parse meal_remove JSON if present
-  const removeMatch = text.match(/```meal_remove\s*\n([\s\S]*?)\n```/);
-  let mealToRemove: { description: string; date: string } | undefined;
-
+  const removeMatch = text.match(/```daily_remove\s*\n([\s\S]*?)\n```/);
   if (removeMatch) {
     try {
       const parsed = JSON.parse(removeMatch[1]);
-      mealToRemove = { description: parsed.description, date: parsed.date };
+      if (parsed.date) dailyRemove = { date: parsed.date };
     } catch {
-      // Invalid JSON, skip
+      // ignore
     }
   }
 
   const cleanMessage = text
-    .replace(/```meal_log\s*\n[\s\S]*?\n```/, "")
-    .replace(/```meal_remove\s*\n[\s\S]*?\n```/, "")
+    .replace(/```daily_log\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```daily_remove\s*\n[\s\S]*?\n```/g, "")
     .trim();
 
-  return { message: cleanMessage, mealToLog, dateToLog, mealToRemove };
+  return { message: cleanMessage, dailyLog, dailyRemove };
 }
 
-export async function chat(
-  messages: ChatMessage[],
-  weekData: WeekData,
-  notes: string[] = [],
-  customPrompt: string | null = null,
-): Promise<ChatResponse> {
-  const systemPrompt = getSystemPrompt(weekData, notes, customPrompt);
+export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
+  const today = getTodayISO();
+  const start = isoDaysAgo(14);
+  const [entries, goals, notes, customPrompt] = await Promise.all([
+    getDailyRange(start, today),
+    getGoals(),
+    getNotes(),
+    getCustomPrompt(),
+  ]);
+
+  const systemPrompt = getSystemPrompt(entries, goals, notes, customPrompt);
   const provider = process.env.LLM_PROVIDER || "claude";
 
   const callLLM = async (msgs: ChatMessage[], sys: string): Promise<string> => {
-    if (provider === "openai") {
-      return chatOpenAI(msgs, sys);
-    }
+    if (provider === "openai") return chatOpenAI(msgs, sys);
     return chatClaude(msgs, sys);
   };
 
   let text = await callLLM(messages, systemPrompt);
 
-  // Check if the model wants to search
+  // Web search loop
   const searchMatch = text.match(/```search_query\s*\n([\s\S]*?)\n```/);
-  if (searchMatch) {
+  if (searchMatch && process.env.TAVILY_API_KEY) {
     const query = searchMatch[1].trim();
-
-    if (process.env.TAVILY_API_KEY) {
-      const { searchWeb } = await import("./search");
-      const searchResults = await searchWeb(query);
-
-      // Re-send with search results
-      const augmentedMessages: ChatMessage[] = [
-        ...messages,
-        { role: "assistant", content: `I searched for: ${query}` },
-        { role: "user", content: `Here are the search results:\n\n${searchResults}\n\nNow please answer my original question using this data. Do NOT output another search_query block.` },
-      ];
-
-      text = await callLLM(augmentedMessages, systemPrompt);
-    }
-
-    // Always clean search_query blocks from output
-    text = text.replace(/```search_query\s*\n[\s\S]*?\n```/g, "").trim();
+    const { searchWeb } = await import("./search");
+    const searchResults = await searchWeb(query);
+    const augmented: ChatMessage[] = [
+      ...messages,
+      { role: "assistant", content: `I searched for: ${query}` },
+      { role: "user", content: `Here are the search results:\n\n${searchResults}\n\nNow answer my original question. Do NOT output another search_query block.` },
+    ];
+    text = await callLLM(augmented, systemPrompt);
   }
+  text = text.replace(/```search_query\s*\n[\s\S]*?\n```/g, "").trim();
 
-  // Check if the model wants to query the meal database
+  // DB query loop
   const dbMatch = text.match(/```db_query\s*\n([\s\S]*?)\n```/);
   if (dbMatch) {
     try {
       const query = JSON.parse(dbMatch[1]);
-      let dbResults = "";
-
-      if (query.type === "search" && query.query) {
-        const results = await searchMeals(query.query);
-        if (results.length === 0) {
-          dbResults = `No meals found matching "${query.query}".`;
-        } else {
-          dbResults = results
-            .map((m) => `${m.date}: ${m.description} = ${m.calories} cal, ${m.fat}g fat, ${m.carbs}g carbs, ${m.protein}g protein`)
-            .join("\n");
-        }
-      } else if (query.type === "date_range" && query.start && query.end) {
-        const results = await getMealsByDateRange(query.start, query.end);
-        if (results.length === 0) {
-          dbResults = `No meals found between ${query.start} and ${query.end}.`;
-        } else {
-          dbResults = results
-            .map((m) => `${m.date}: ${m.description} = ${m.calories} cal, ${m.fat}g fat, ${m.carbs}g carbs, ${m.protein}g protein`)
-            .join("\n");
-        }
-      }
-
-      if (dbResults) {
-        const augmentedMessages: ChatMessage[] = [
+      if (query.start && query.end) {
+        const results = await getDailyRange(query.start, query.end);
+        const dbResults = results.length === 0
+          ? `No daily entries between ${query.start} and ${query.end}.`
+          : results
+              .map((e) => `${e.date}: ${e.calories} cal, ${e.fat}f, ${e.carbs}c, ${e.protein}p — ${e.description}`)
+              .join("\n");
+        const augmented: ChatMessage[] = [
           ...messages,
-          { role: "assistant", content: `I looked up the meal history.` },
-          { role: "user", content: `Here are the database results:\n\n${dbResults}\n\nNow please answer my original question using this data. Do NOT output another db_query block.` },
+          { role: "assistant", content: `I queried the daily entries.` },
+          { role: "user", content: `Database results:\n\n${dbResults}\n\nNow answer my original question. Do NOT output another db_query block.` },
         ];
-
-        text = await callLLM(augmentedMessages, systemPrompt);
+        text = await callLLM(augmented, systemPrompt);
       }
     } catch {
-      // Invalid JSON, continue with original response
+      // ignore
     }
-
-    text = text.replace(/```db_query\s*\n[\s\S]*?\n```/g, "").trim();
   }
+  text = text.replace(/```db_query\s*\n[\s\S]*?\n```/g, "").trim();
 
   return parseResponse(text);
 }

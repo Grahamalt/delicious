@@ -9,12 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.82.0",
     "@supabase/supabase-js": "^2.101.0",
     "next": "^15.3.0",
     "openai": "^6.32.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "recharts": "^3.8.1",
     "tavily": "^1.0.2"
   },
   "devDependencies": {

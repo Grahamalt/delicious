@@ -1,102 +1,54 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Chat from "@/components/Chat";
-import WeekTable from "@/components/WeekTable";
-import Notes from "@/components/Notes";
-import Trends from "@/components/Trends";
+import Today from "@/components/Today";
+import WeekChart from "@/components/WeekChart";
+import Settings from "@/components/Settings";
+import TrendsChart from "@/components/TrendsChart";
 import Progress from "@/components/Progress";
-import { WeekData } from "@/lib/sheets";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "data" | "trends" | "progress" | "notes">("chat");
-  const [weekData, setWeekData] = useState<WeekData | null>(null);
+  const [activeTab, setActiveTab] = useState<"chat" | "today" | "week" | "trends" | "progress" | "settings">("chat");
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchWeekData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/sheets");
-      if (res.ok) {
-        const data = await res.json();
-        setWeekData(data);
-      }
-    } catch {
-      // silently fail, will retry
-    }
-  }, []);
+  const refresh = () => setRefreshKey((k) => k + 1);
 
-  useEffect(() => {
-    fetchWeekData();
-  }, [fetchWeekData]);
+  const tabBtn = (id: typeof activeTab, label: string) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`px-3 py-1 rounded-md text-sm transition-colors ${
+        activeTab === id ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="h-screen flex flex-col max-w-2xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-800">
         <h1 className="text-lg font-bold">Delicious</h1>
-        <div className="flex bg-gray-800 rounded-lg p-0.5">
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`px-3 py-1 rounded-md text-sm transition-colors ${
-              activeTab === "chat"
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            Chat
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("data");
-              fetchWeekData();
-            }}
-            className={`px-3 py-1 rounded-md text-sm transition-colors ${
-              activeTab === "data"
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            This Week
-          </button>
-          <button
-            onClick={() => setActiveTab("trends")}
-            className={`px-3 py-1 rounded-md text-sm transition-colors ${
-              activeTab === "trends"
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            Trends
-          </button>
-          <button
-            onClick={() => setActiveTab("progress")}
-            className={`px-3 py-1 rounded-md text-sm transition-colors ${
-              activeTab === "progress"
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            Me
-          </button>
-          <button
-            onClick={() => setActiveTab("notes")}
-            className={`px-3 py-1 rounded-md text-sm transition-colors ${
-              activeTab === "notes"
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            Notes
-          </button>
+        <div className="flex bg-gray-800 rounded-lg p-0.5 flex-wrap">
+          {tabBtn("chat", "Chat")}
+          {tabBtn("today", "Today")}
+          {tabBtn("week", "Week")}
+          {tabBtn("trends", "Trends")}
+          {tabBtn("progress", "Me")}
+          {tabBtn("settings", "Settings")}
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-hidden p-3">
         {activeTab === "chat" ? (
-          <Chat onMealLogged={fetchWeekData} />
-        ) : activeTab === "data" ? (
+          <Chat onMealLogged={refresh} />
+        ) : activeTab === "today" ? (
           <div className="h-full overflow-y-auto">
-            <WeekTable data={weekData} />
+            <Today refreshKey={refreshKey} />
+          </div>
+        ) : activeTab === "week" ? (
+          <div className="h-full overflow-y-auto">
+            <WeekChart refreshKey={refreshKey} />
           </div>
         ) : activeTab === "progress" ? (
           <div className="h-full overflow-y-auto">
@@ -104,11 +56,11 @@ export default function Home() {
           </div>
         ) : activeTab === "trends" ? (
           <div className="h-full overflow-y-auto">
-            <Trends />
+            <TrendsChart refreshKey={refreshKey} />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
-            <Notes />
+            <Settings onSaved={refresh} />
           </div>
         )}
       </div>
