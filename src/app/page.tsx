@@ -7,9 +7,10 @@ import WeekChart from "@/components/WeekChart";
 import Settings from "@/components/Settings";
 import TrendsChart from "@/components/TrendsChart";
 import Progress from "@/components/Progress";
+import Lifts from "@/components/Lifts";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "today" | "week" | "trends" | "progress" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "today" | "week" | "trends" | "lifts" | "progress" | "settings">("chat");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -34,6 +35,7 @@ export default function Home() {
           {tabBtn("today", "Today")}
           {tabBtn("week", "Week")}
           {tabBtn("trends", "Trends")}
+          {tabBtn("lifts", "Lifts")}
           {tabBtn("progress", "Me")}
           {tabBtn("settings", "Settings")}
         </div>
@@ -57,6 +59,10 @@ export default function Home() {
         ) : activeTab === "trends" ? (
           <div className="h-full overflow-y-auto">
             <TrendsChart refreshKey={refreshKey} />
+          </div>
+        ) : activeTab === "lifts" ? (
+          <div className="h-full overflow-y-auto">
+            <Lifts />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
