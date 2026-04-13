@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listExercises, createExercise } from "@/lib/lifts";
+import { listExercises, createExercise, EXERCISE_CATEGORIES, ExerciseCategory } from "@/lib/lifts";
 
 export async function GET() {
   const exercises = await listExercises();
@@ -11,6 +11,9 @@ export async function POST(req: NextRequest) {
   if (!body.name) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
   }
-  const exercise = await createExercise(body.name, body.description || "");
+  const category = EXERCISE_CATEGORIES.includes(body.category)
+    ? (body.category as ExerciseCategory)
+    : "push";
+  const exercise = await createExercise(body.name, body.description || "", category);
   return NextResponse.json({ exercise });
 }

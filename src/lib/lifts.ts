@@ -1,9 +1,14 @@
 import { getSupabase } from "./supabase";
 
+export type ExerciseCategory = "push" | "pull" | "legs" | "upper";
+
+export const EXERCISE_CATEGORIES: ExerciseCategory[] = ["push", "pull", "legs", "upper"];
+
 export interface Exercise {
   id: number;
   name: string;
   description: string;
+  category: ExerciseCategory;
   created_at?: string;
 }
 
@@ -36,10 +41,14 @@ export async function getExercise(id: number): Promise<Exercise | null> {
   return data as Exercise | null;
 }
 
-export async function createExercise(name: string, description: string): Promise<Exercise> {
+export async function createExercise(
+  name: string,
+  description: string,
+  category: ExerciseCategory
+): Promise<Exercise> {
   const { data, error } = await getSupabase()
     .from("exercises")
-    .insert({ name, description })
+    .insert({ name, description, category })
     .select()
     .single();
   if (error) throw new Error(`createExercise failed: ${error.message}`);
@@ -48,7 +57,7 @@ export async function createExercise(name: string, description: string): Promise
 
 export async function updateExercise(
   id: number,
-  fields: { name?: string; description?: string }
+  fields: { name?: string; description?: string; category?: ExerciseCategory }
 ): Promise<Exercise> {
   const { data, error } = await getSupabase()
     .from("exercises")

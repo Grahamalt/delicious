@@ -15,10 +15,20 @@ import {
   ComposedChart,
 } from "recharts";
 
+type Category = "push" | "pull" | "legs" | "upper";
+const CATEGORIES: Category[] = ["push", "pull", "legs", "upper"];
+const CATEGORY_LABELS: Record<Category, string> = {
+  push: "Push",
+  pull: "Pull",
+  legs: "Legs",
+  upper: "Upper",
+};
+
 interface Exercise {
   id: number;
   name: string;
   description: string;
+  category: Category;
 }
 
 interface ExerciseSet {
@@ -47,7 +57,7 @@ export default function Lifts() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Exercise | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [addingTo, setAddingTo] = useState<Category | null>(null);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
 
@@ -66,18 +76,28 @@ export default function Lifts() {
   }, [loadExercises]);
 
   const createExercise = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !addingTo) return;
     const res = await fetch("/api/exercises", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim(), description: newDesc.trim() }),
+      body: JSON.stringify({
+        name: newName.trim(),
+        description: newDesc.trim(),
+        category: addingTo,
+      }),
     });
     if (res.ok) {
       setNewName("");
       setNewDesc("");
-      setAdding(false);
+      setAddingTo(null);
       await loadExercises();
     }
+  };
+
+  const cancelAdd = () => {
+    setAddingTo(null);
+    setNewName("");
+    setNewDesc("");
   };
 
   const deleteExercise = async (id: number) => {
@@ -97,78 +117,89 @@ export default function Lifts() {
     );
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <div className="text-xs text-gray-500 uppercase tracking-wide">Exercises</div>
-        <button
-          onClick={() => setAdding(true)}
-          className="text-xs bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded"
-        >
-          + New
-        </button>
-      </div>
+  if (loading) {
+    return <div className="text-gray-500 text-center py-8">Loading...</div>;
+  }
 
-      {adding && (
-        <div className="bg-gray-900 rounded-lg p-3 space-y-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Exercise name (e.g. Barbell back squat)"
-            className="w-full bg-gray-800 rounded p-2 text-sm"
-            autoFocus
-          />
-          <textarea
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-            placeholder="Description / form cues / setup notes"
-            rows={3}
-            className="w-full bg-gray-800 rounded p-2 text-sm resize-none"
-          />
-          <div className="flex gap-2">
+  const byCategory: Record<Category, Exercise[]> = {
+    push: [],
+    pull: [],
+    legs: [],
+    upper: [],
+  };
+  for (const e of exercises) {
+    if (CATEGORIES.includes(e.category)) byCategory[e.category].push(e);
+  }
+
+  return (
+    <div className="space-y-4">
+      {CATEGORIES.map((cat) => (
+        <div key={cat} className="space-y-2">
+          <div className="flex justify-between items-center">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">
+              {CATEGORY_LABELS[cat]}
+              <span className="ml-2 text-gray-600">({byCategory[cat].length})</span>
+            </div>
             <button
-              onClick={createExercise}
-              disabled={!newName.trim()}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded py-2 text-sm font-medium"
+              onClick={() => setAddingTo(cat)}
+              className="text-xs bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded"
             >
-              Create
-            </button>
-            <button
-              onClick={() => {
-                setAdding(false);
-                setNewName("");
-                setNewDesc("");
-              }}
-              className="flex-1 bg-gray-800 hover:bg-gray-700 rounded py-2 text-sm"
-            >
-              Cancel
+              + New
             </button>
           </div>
-        </div>
-      )}
 
-      {loading ? (
-        <div className="text-gray-500 text-center py-8">Loading...</div>
-      ) : exercises.length === 0 && !adding ? (
-        <div className="text-gray-600 text-sm text-center py-8">
-          No exercises yet. Add one to start tracking.
+          {addingTo === cat && (
+            <div className="bg-gray-900 rounded-lg p-3 space-y-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Exercise name (e.g. Barbell back squat)"
+                className="w-full bg-gray-800 rounded p-2 text-sm"
+                autoFocus
+              />
+              <textarea
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                placeholder="Description / form cues / setup notes"
+                rows={3}
+                className="w-full bg-gray-800 rounded p-2 text-sm resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={createExercise}
+                  disabled={!newName.trim()}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded py-2 text-sm font-medium"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={cancelAdd}
+                  className="flex-1 bg-gray-800 hover:bg-gray-700 rounded py-2 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {byCategory[cat].length === 0 && addingTo !== cat ? (
+            <div className="text-gray-600 text-xs italic pl-1">No {CATEGORY_LABELS[cat].toLowerCase()} exercises yet</div>
+          ) : (
+            byCategory[cat].map((e) => (
+              <button
+                key={e.id}
+                onClick={() => setSelected(e)}
+                className="w-full text-left bg-gray-900 hover:bg-gray-800 rounded-lg p-3 transition-colors"
+              >
+                <div className="font-medium text-sm">{e.name}</div>
+                {e.description && (
+                  <div className="text-xs text-gray-500 mt-1 line-clamp-2">{e.description}</div>
+                )}
+              </button>
+            ))
+          )}
         </div>
-      ) : (
-        <div className="space-y-2">
-          {exercises.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => setSelected(e)}
-              className="w-full text-left bg-gray-900 hover:bg-gray-800 rounded-lg p-3 transition-colors"
-            >
-              <div className="font-medium text-sm">{e.name}</div>
-              {e.description && (
-                <div className="text-xs text-gray-500 mt-1 line-clamp-2">{e.description}</div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
