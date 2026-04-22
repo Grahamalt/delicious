@@ -4,3 +4,5 @@ node_modules/
 .env*.local
 out/
 .vercel
+tsconfig.tsbuildinfo
+body-tracking-for-claude/

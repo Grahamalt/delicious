@@ -6,7 +6,7 @@ import Today from "@/components/Today";
 import WeekChart from "@/components/WeekChart";
 import Settings from "@/components/Settings";
 import TrendsChart from "@/components/TrendsChart";
-import Progress from "@/components/Progress";
+import BodyTracking from "@/components/BodyTracking";
 import Lifts from "@/components/Lifts";
 
 export default function Home() {
@@ -54,7 +54,7 @@ export default function Home() {
           </div>
         ) : activeTab === "progress" ? (
           <div className="h-full overflow-y-auto">
-            <Progress />
+            <BodyTracking />
           </div>
         ) : activeTab === "trends" ? (
           <div className="h-full overflow-y-auto">
