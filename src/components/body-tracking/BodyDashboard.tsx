@@ -11,89 +11,6 @@ import { PHOTO_ANGLE_LABELS } from '@/types/body-tracking';
 import TrendCharts from './TrendCharts';
 import ScanHistoryGrid from './ScanHistoryGrid';
 
-// ── Mock data (for demo / development) ───────────────────────
-// Remove this and use real `scans` prop once wired to API
-export const MOCK_SCANS: BodyScan[] = [
-  {
-    id: '1',
-    date: '2025-01-15',
-    weightLbs: 161.2,
-    waistCm: 83.5,
-    shoulderCm: 112.0,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: 'Starting point.',
-    createdAt: '2025-01-15T08:00:00Z',
-  },
-  {
-    id: '2',
-    date: '2025-02-01',
-    weightLbs: 160.0,
-    waistCm: 82.8,
-    shoulderCm: 112.5,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: null,
-    createdAt: '2025-02-01T08:00:00Z',
-  },
-  {
-    id: '3',
-    date: '2025-02-15',
-    weightLbs: 159.4,
-    waistCm: 82.0,
-    shoulderCm: 113.2,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: 'Feeling tighter.',
-    createdAt: '2025-02-15T08:00:00Z',
-  },
-  {
-    id: '4',
-    date: '2025-03-01',
-    weightLbs: 158.8,
-    waistCm: 81.2,
-    shoulderCm: 113.8,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: null,
-    createdAt: '2025-03-01T08:00:00Z',
-  },
-  {
-    id: '5',
-    date: '2025-03-20',
-    weightLbs: 158.2,
-    waistCm: 80.5,
-    shoulderCm: 114.5,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: 'Waist dropping, weight holding — recomp working.',
-    createdAt: '2025-03-20T08:00:00Z',
-  },
-  {
-    id: '6',
-    date: '2025-04-10',
-    weightLbs: 157.8,
-    waistCm: 79.8,
-    shoulderCm: 115.0,
-    photoFrontUrl: null,
-    photoSideLeftUrl: null,
-    photoSideRightUrl: null,
-    photoBackUrl: null,
-    notes: null,
-    createdAt: '2025-04-10T08:00:00Z',
-  },
-];
-
 // ── Helpers ───────────────────────────────────────────────────
 function formatDate(iso: string) {
   const d = new Date(iso + 'T00:00:00');
@@ -252,13 +169,23 @@ export default function BodyDashboard({
   targetWaistCm,
   targetShoulderCm,
 }: BodyDashboardProps) {
-  // Use mock data if no real scans provided (development / demo)
-  const scans = scansProp && scansProp.length > 0 ? scansProp : MOCK_SCANS;
+  const scans = scansProp ?? [];
 
   const sorted = useMemo(
     () => [...scans].sort((a, b) => b.date.localeCompare(a.date)),
     [scans],
   );
+
+  if (sorted.length === 0) {
+    return (
+      <div className="rounded-2xl bg-[#1a1a1a] p-8 text-center">
+        <p className="text-sm text-neutral-400">No scans yet.</p>
+        <p className="mt-1 text-xs text-neutral-600">
+          Switch to the Log Scan tab to record your first entry.
+        </p>
+      </div>
+    );
+  }
 
   const latest = sorted[0];
   const previous = sorted[1];

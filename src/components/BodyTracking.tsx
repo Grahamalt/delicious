@@ -25,7 +25,7 @@ export default function BodyTracking() {
       setScans(data.scans ?? []);
     } catch (err) {
       console.error('[BodyTracking] Failed to fetch scans:', err);
-      setError('Could not load scans. Using demo data.');
+      setError('Could not load scans.');
     } finally {
       setLoading(false);
     }
