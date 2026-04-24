@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkBearerAuth } from "@/lib/auth";
 import { getBodyScanById, updateBodyScan, deleteBodyScan } from "@/lib/body";
 import type { UpdateBodyScanInput } from "@/types/body-tracking";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(req: NextRequest, { params }: Ctx) {
-  if (!checkBearerAuth(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(_req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
     const scan = await getBodyScanById(id);
@@ -21,9 +17,6 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  if (!checkBearerAuth(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const { id } = await params;
     const body = (await req.json()) as UpdateBodyScanInput;
@@ -44,10 +37,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: Ctx) {
-  if (!checkBearerAuth(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function DELETE(_req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
     const deleted = await deleteBodyScan(id);

@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkBearerAuth } from "@/lib/auth";
 import { listBodyScans, upsertBodyScan } from "@/lib/body";
 import type { CreateBodyScanInput } from "@/types/body-tracking";
 
-export async function GET(req: NextRequest) {
-  if (!checkBearerAuth(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET() {
   try {
     const scans = await listBodyScans();
     return NextResponse.json({ scans, total: scans.length });
@@ -17,9 +13,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!checkBearerAuth(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const body = (await req.json()) as Partial<CreateBodyScanInput>;
 

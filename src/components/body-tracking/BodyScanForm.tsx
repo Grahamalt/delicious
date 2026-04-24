@@ -334,7 +334,7 @@ export default function BodyScanForm({ onSuccess, initialData }: BodyScanFormPro
           </span>
         </div>
         <p className="text-xs text-neutral-600">
-          Measure around the widest point of both shoulders (deltoids).
+          Measure the circumference around your shoulders and chest (tape around deltoids, across upper chest and back).
         </p>
       </div>
 
