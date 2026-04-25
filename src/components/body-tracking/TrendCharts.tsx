@@ -9,6 +9,9 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -384,6 +387,128 @@ export function RatioChart({ scans }: { scans: BodyScan[] }) {
   );
 }
 
+// ── Weekly Weight Gain Chart ──────────────────────────────────
+// Buckets scans by ISO week (Mon–Sun). For each week containing
+// at least one weigh-in, gain = (last weight in week) − (last weight
+// in prior populated week). The first populated week falls back to
+// last − first within that same week.
+function weekStart(iso: string): Date {
+  const d = new Date(iso + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = (day + 6) % 7;
+  d.setDate(d.getDate() - diffToMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function weekKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatWeekLabel(key: string): string {
+  const d = new Date(key + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function WeeklyGainChart({ scans }: { scans: BodyScan[] }) {
+  const sorted = sortedScans(scans).filter((s) => s.weightLbs != null);
+
+  // Group by week start
+  const weeks = new Map<string, { first: number; last: number; firstDate: string; lastDate: string }>();
+  for (const s of sorted) {
+    const key = weekKey(weekStart(s.date));
+    const w = s.weightLbs as number;
+    const existing = weeks.get(key);
+    if (!existing) {
+      weeks.set(key, { first: w, last: w, firstDate: s.date, lastDate: s.date });
+    } else {
+      existing.last = w;
+      existing.lastDate = s.date;
+    }
+  }
+
+  const orderedKeys = [...weeks.keys()].sort();
+  const data: { week: string; gain: number }[] = [];
+  let prevLast: number | null = null;
+  for (const key of orderedKeys) {
+    const w = weeks.get(key)!;
+    const gain = prevLast == null ? w.last - w.first : w.last - prevLast;
+    data.push({ week: formatWeekLabel(key), gain: +gain.toFixed(2) });
+    prevLast = w.last;
+  }
+
+  // Drop the first bar if it's a same-week zero (no prior reference, single scan)
+  const display = data.filter((_, i) => !(i === 0 && data[i].gain === 0 && weeks.get(orderedKeys[0])!.first === weeks.get(orderedKeys[0])!.last));
+
+  if (display.length === 0) {
+    return (
+      <ChartCard title="Weekly Weight Change" subtitle="lbs gained per week">
+        <div className="flex h-[180px] items-center justify-center text-xs text-neutral-600">
+          Need at least two weigh-ins to compute weekly change.
+        </div>
+      </ChartCard>
+    );
+  }
+
+  const avg = display.reduce((sum, d) => sum + d.gain, 0) / display.length;
+  const avgLabel = `${avg >= 0 ? '+' : ''}${avg.toFixed(2)} lbs`;
+
+  return (
+    <ChartCard title="Weekly Weight Change" subtitle="lbs gained per week — bars fill in as the week progresses">
+      <div className="mb-2 flex items-center gap-2 text-xs">
+        <span className="inline-block h-2 w-3 rounded-sm bg-pink-500" />
+        <span className="text-neutral-400">avg over prior weeks:</span>
+        <span className={`font-semibold ${avg > 0 ? 'text-red-400' : avg < 0 ? 'text-green-400' : 'text-neutral-300'}`}>
+          {avgLabel}
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={display} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" {...gridStyle} />
+          <XAxis dataKey="week" tick={axisStyle} tickLine={false} axisLine={false} />
+          <YAxis
+            tick={axisStyle}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `${v > 0 ? '+' : ''}${v}`}
+          />
+          <Tooltip
+            cursor={{ fill: '#262626', opacity: 0.3 }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const v = payload[0].value as number;
+              return (
+                <div className="rounded-xl border border-neutral-800 bg-[#1a1a1a] px-3 py-2 text-sm shadow-xl">
+                  <p className="mb-1 text-neutral-400">week of {label}</p>
+                  <p className={`font-semibold ${v > 0 ? 'text-red-400' : v < 0 ? 'text-green-400' : 'text-neutral-300'}`}>
+                    {v > 0 ? '+' : ''}{v.toFixed(2)} lbs
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <ReferenceLine y={0} stroke="#525252" strokeWidth={1} />
+          <ReferenceLine
+            y={+avg.toFixed(2)}
+            stroke="#ec4899"
+            strokeDasharray="4 4"
+            strokeOpacity={0.7}
+            label={{ value: `avg ${avgLabel}`, fill: '#ec4899', fontSize: 10, position: 'right' }}
+          />
+          <Bar dataKey="gain" radius={[4, 4, 0, 0]}>
+            {display.map((d, i) => (
+              <Cell key={i} fill={d.gain > 0 ? '#ef4444' : d.gain < 0 ? '#22c55e' : '#737373'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
 // ── Combined export (all charts) ──────────────────────────────
 export default function TrendCharts({
   scans,
@@ -402,6 +527,7 @@ export default function TrendCharts({
   return (
     <div className="flex flex-col gap-4">
       <WeightChart scans={scans} targetWeightLbs={targetWeightLbs} />
+      <WeeklyGainChart scans={scans} />
       <WaistChart scans={scans} targetWaistCm={targetWaistCm} />
       <ShoulderChart scans={scans} targetShoulderCm={targetShoulderCm} />
       <ShoulderToWaistChart scans={scans} />
