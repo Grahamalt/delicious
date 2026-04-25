@@ -388,10 +388,10 @@ export function RatioChart({ scans }: { scans: BodyScan[] }) {
 }
 
 // ── Weekly Weight Gain Chart ──────────────────────────────────
-// Buckets scans by week (Sun–Sat). For each week containing
-// at least one weigh-in, gain = (last weight in week) − (last weight
-// in prior populated week). The first populated week falls back to
-// last − first within that same week.
+// Buckets scans by week (Sun–Sat) and averages all weigh-ins in
+// each week. Gain = (this week's avg) − (previous populated week's avg).
+// Smooths out daily noise (water, meal timing) so the bar reflects
+// the real trend rather than which day you stepped on the scale.
 function weekStart(iso: string): Date {
   const d = new Date(iso + 'T00:00:00');
   const day = d.getDay(); // 0=Sun..6=Sat
@@ -415,32 +415,33 @@ function formatWeekLabel(key: string): string {
 export function WeeklyGainChart({ scans }: { scans: BodyScan[] }) {
   const sorted = sortedScans(scans).filter((s) => s.weightLbs != null);
 
-  // Group by week start
-  const weeks = new Map<string, { first: number; last: number; firstDate: string; lastDate: string }>();
+  // Group by week start, accumulating sum + count for the average
+  const weeks = new Map<string, { sum: number; count: number }>();
   for (const s of sorted) {
     const key = weekKey(weekStart(s.date));
     const w = s.weightLbs as number;
     const existing = weeks.get(key);
     if (!existing) {
-      weeks.set(key, { first: w, last: w, firstDate: s.date, lastDate: s.date });
+      weeks.set(key, { sum: w, count: 1 });
     } else {
-      existing.last = w;
-      existing.lastDate = s.date;
+      existing.sum += w;
+      existing.count += 1;
     }
   }
 
   const orderedKeys = [...weeks.keys()].sort();
   const data: { week: string; gain: number }[] = [];
-  let prevLast: number | null = null;
+  let prevAvg: number | null = null;
   for (const key of orderedKeys) {
     const w = weeks.get(key)!;
-    const gain = prevLast == null ? w.last - w.first : w.last - prevLast;
-    data.push({ week: formatWeekLabel(key), gain: +gain.toFixed(2) });
-    prevLast = w.last;
+    const avg = w.sum / w.count;
+    if (prevAvg != null) {
+      data.push({ week: formatWeekLabel(key), gain: +(avg - prevAvg).toFixed(2) });
+    }
+    prevAvg = avg;
   }
 
-  // Drop the first bar if it's a same-week zero (no prior reference, single scan)
-  const display = data.filter((_, i) => !(i === 0 && data[i].gain === 0 && weeks.get(orderedKeys[0])!.first === weeks.get(orderedKeys[0])!.last));
+  const display = data;
 
   if (display.length === 0) {
     return (
@@ -456,7 +457,7 @@ export function WeeklyGainChart({ scans }: { scans: BodyScan[] }) {
   const avgLabel = `${avg >= 0 ? '+' : ''}${avg.toFixed(2)} lbs`;
 
   return (
-    <ChartCard title="Weekly Weight Change" subtitle="lbs gained per week — bars fill in as the week progresses">
+    <ChartCard title="Weekly Weight Change" subtitle="diff between weekly averages — smooths daily noise">
       <div className="mb-2 flex items-center gap-2 text-xs">
         <span className="inline-block h-2 w-3 rounded-sm bg-pink-500" />
         <span className="text-neutral-400">avg over prior weeks:</span>
