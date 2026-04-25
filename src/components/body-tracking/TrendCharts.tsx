@@ -388,15 +388,14 @@ export function RatioChart({ scans }: { scans: BodyScan[] }) {
 }
 
 // ── Weekly Weight Gain Chart ──────────────────────────────────
-// Buckets scans by ISO week (Mon–Sun). For each week containing
+// Buckets scans by week (Sun–Sat). For each week containing
 // at least one weigh-in, gain = (last weight in week) − (last weight
 // in prior populated week). The first populated week falls back to
 // last − first within that same week.
 function weekStart(iso: string): Date {
   const d = new Date(iso + 'T00:00:00');
   const day = d.getDay(); // 0=Sun..6=Sat
-  const diffToMonday = (day + 6) % 7;
-  d.setDate(d.getDate() - diffToMonday);
+  d.setDate(d.getDate() - day);
   d.setHours(0, 0, 0, 0);
   return d;
 }
