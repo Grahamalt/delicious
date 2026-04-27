@@ -8,9 +8,10 @@ import Settings from "@/components/Settings";
 import TrendsChart from "@/components/TrendsChart";
 import BodyTracking from "@/components/BodyTracking";
 import Lifts from "@/components/Lifts";
+import Recipes from "@/components/Recipes";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"chat" | "today" | "week" | "trends" | "lifts" | "progress" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "today" | "week" | "trends" | "lifts" | "recipes" | "progress" | "settings">("chat");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -36,6 +37,7 @@ export default function Home() {
           {tabBtn("week", "Week")}
           {tabBtn("trends", "Trends")}
           {tabBtn("lifts", "Lifts")}
+          {tabBtn("recipes", "Recipes")}
           {tabBtn("progress", "Me")}
           {tabBtn("settings", "Settings")}
         </div>
@@ -63,6 +65,10 @@ export default function Home() {
         ) : activeTab === "lifts" ? (
           <div className="h-full overflow-y-auto">
             <Lifts />
+          </div>
+        ) : activeTab === "recipes" ? (
+          <div className="h-full overflow-y-auto">
+            <Recipes />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
