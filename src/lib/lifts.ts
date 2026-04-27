@@ -1,8 +1,8 @@
 import { getSupabase } from "./supabase";
 
-export type ExerciseCategory = "push" | "pull" | "legs" | "upper";
+export type ExerciseCategory = "push" | "pull" | "legs" | "upper" | "delts";
 
-export const EXERCISE_CATEGORIES: ExerciseCategory[] = ["push", "pull", "legs", "upper"];
+export const EXERCISE_CATEGORIES: ExerciseCategory[] = ["push", "pull", "legs", "upper", "delts"];
 
 export interface Exercise {
   id: number;

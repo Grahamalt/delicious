@@ -15,13 +15,14 @@ import {
   ComposedChart,
 } from "recharts";
 
-type Category = "push" | "pull" | "legs" | "upper";
-const CATEGORIES: Category[] = ["push", "pull", "legs", "upper"];
+type Category = "push" | "pull" | "legs" | "upper" | "delts";
+const CATEGORIES: Category[] = ["push", "pull", "legs", "upper", "delts"];
 const CATEGORY_LABELS: Record<Category, string> = {
   push: "Push",
   pull: "Pull",
   legs: "Legs",
   upper: "Upper",
+  delts: "Delt Blitz",
 };
 
 interface Exercise {
@@ -126,6 +127,7 @@ export default function Lifts() {
     pull: [],
     legs: [],
     upper: [],
+    delts: [],
   };
   for (const e of exercises) {
     if (CATEGORIES.includes(e.category)) byCategory[e.category].push(e);
